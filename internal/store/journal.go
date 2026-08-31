@@ -115,7 +115,7 @@ func (s *Store) BeginOperation(op Operation, fromStatus string, resources []stri
 		return err
 	}
 	if inflight > 0 {
-		return fmt.Errorf("%w: suggestion %s; restart autoskills to reconcile it", ErrOperationInFlight, op.SuggestionID)
+		return fmt.Errorf("%w: suggestion %s; restart temper to reconcile it", ErrOperationInFlight, op.SuggestionID)
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
@@ -146,7 +146,7 @@ JOIN operations o ON o.id = c.operation_id WHERE c.resource = ?`, r).Scan(&holde
 		case err != nil:
 			return err
 		case isUnfinished(state):
-			return fmt.Errorf("%w: %s is held by operation %s (%s); restart autoskills to reconcile it",
+			return fmt.Errorf("%w: %s is held by operation %s (%s); restart temper to reconcile it",
 				ErrResourceBusy, r, holder, state)
 		}
 		if _, err := tx.Exec(`INSERT INTO resource_claims(resource, operation_id, created_at) VALUES(?,?,?)

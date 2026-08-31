@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // bootstrapCapability exercises the real credential path a legitimate UI uses. Reaching into the
@@ -346,5 +346,29 @@ func TestCapabilityIsUnpredictableAndProcessScoped(t *testing.T) {
 	}
 	if bootstrapCapability(t, firstServer) != a {
 		t.Fatal("capability changed within one process")
+	}
+}
+
+func TestLegacyCapabilityHeaderRemainsAcceptedDuringUpgrade(t *testing.T) {
+	srv, st, _ := newTestServer(t)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	req := hostileRequest(t, ts, `{"action":"reject"}`)
+	req.Header.Set(LegacyCapabilityHeader, bootstrapCapability(t, ts))
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("legacy capability status = %d", resp.StatusCode)
+	}
+	g, err := st.GetSuggestion("sg_int01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Status != "rejected" {
+		t.Fatalf("status = %q", g.Status)
 	}
 }

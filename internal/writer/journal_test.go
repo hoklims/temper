@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // journalRepo builds a repository with hand-written context files and a store holding one pending
@@ -23,7 +23,7 @@ func journalRepo(t *testing.T) (*store.Store, string, store.Suggestion) {
 	if err := os.WriteFile(filepath.Join(repo, "CLAUDE.md"), []byte("# CLAUDE.md\n\nHand-written too.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(filepath.Join(t.TempDir(), "autoskills.db"))
+	st, err := store.Open(filepath.Join(t.TempDir(), "temper.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestCrashMidMutationConvergesOnReconcile(t *testing.T) {
 	clearApplyHook()
 
 	// the state HOK-540 has to be able to end: file mutated, decision not recorded
-	if !strings.Contains(read(t, agents), "autoskills:begin id=sg_test01") {
+	if !strings.Contains(read(t, agents), "temper:begin id=sg_test01") {
 		t.Fatal("setup wrong: the first file was not written before the crash")
 	}
 	if strings.Contains(read(t, claude), "@AGENTS.md") {
@@ -144,7 +144,7 @@ func TestCrashMidMutationConvergesOnReconcile(t *testing.T) {
 		t.Fatalf("reconcile report = %v", report)
 	}
 
-	if !strings.Contains(read(t, agents), "autoskills:begin id=sg_test01") {
+	if !strings.Contains(read(t, agents), "temper:begin id=sg_test01") {
 		t.Fatalf("AGENTS.md lost its block:\n%s", read(t, agents))
 	}
 	if !strings.Contains(read(t, claude), "@AGENTS.md") {
@@ -321,7 +321,7 @@ func TestRollbackRefusesARedirectedDestination(t *testing.T) {
 	if err := os.MkdirAll(skills, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(skills, "autoskills-use-pnpm-never-npm")); err != nil {
+	if err := os.Symlink(outside, filepath.Join(skills, "temper-use-pnpm-never-npm")); err != nil {
 		t.Fatalf("create directory symlink witness: %v", err)
 	}
 	if err := unwind(&mut); err == nil {
@@ -402,7 +402,7 @@ func TestUndoRefusesATamperedWrittenPath(t *testing.T) {
 	repo := t.TempDir()
 	elsewhere := t.TempDir()
 	victim := filepath.Join(elsewhere, "important.txt")
-	if err := os.WriteFile(victim, []byte("not autoskills' file\n"), 0o644); err != nil {
+	if err := os.WriteFile(victim, []byte("not temper' file\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -417,7 +417,7 @@ func TestUndoRefusesATamperedWrittenPath(t *testing.T) {
 	if err := removeUnjournaled(g); err == nil {
 		t.Fatal("removing a path this suggestion never wrote must be refused")
 	}
-	if got := read(t, victim); got != "not autoskills' file\n" {
+	if got := read(t, victim); got != "not temper' file\n" {
 		t.Fatalf("an unrelated file was deleted or altered: %q", got)
 	}
 	if _, err := os.Stat(written); err != nil {
@@ -460,7 +460,7 @@ func TestUndoRefusesATamperedWrittenPath(t *testing.T) {
 	if err := removeUnjournaled(block); err != nil {
 		t.Fatal(err)
 	}
-	if got := read(t, filepath.Join(repo, "AGENTS.md")); strings.Contains(got, "autoskills:begin id=sg_test01") {
+	if got := read(t, filepath.Join(repo, "AGENTS.md")); strings.Contains(got, "temper:begin id=sg_test01") {
 		t.Fatalf("block not pruned:\n%s", got)
 	}
 	if _, err := os.Stat(filepath.Join(elsewhere, "AGENTS.md")); !os.IsNotExist(err) {

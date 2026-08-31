@@ -1,14 +1,14 @@
-# Architecture d’AutoSkills
+# Architecture d’Temper
 
 État observé le 31 août 2026 sur la branche de préparation de la PR #1. Les preuves de merge restent attachées au SHA final de la PR, pas à ce document.
 
 ## Résumé
 
-AutoSkills est aujourd’hui un petit pipeline Go qui lit des transcripts Cursor et Claude Code, applique un filtre déterministe, appelle un endpoint compatible OpenAI, puis propose des règles à écrire dans le dépôt. La base est exploitable, mais plusieurs frontières sont encore confondues : les formats sources, la sélection des signaux, la distillation, le stockage des suggestions et les écritures runtime.
+Temper est aujourd’hui un petit pipeline Go qui lit des transcripts Cursor et Claude Code, applique un filtre déterministe, appelle un endpoint compatible OpenAI, puis propose des règles à écrire dans le dépôt. La base est exploitable, mais plusieurs frontières sont encore confondues : les formats sources, la sélection des signaux, la distillation, le stockage des suggestions et les écritures runtime.
 
-La cible conserve le principe qui fait la valeur du projet : le chemin normal des agents reste intact. AutoSkills apprend hors du chemin critique, par lots, à partir de traces déjà produites.
+La cible conserve le principe qui fait la valeur du projet : le chemin normal des agents reste intact. Temper apprend hors du chemin critique, par lots, à partir de traces déjà produites.
 
-Le diagramme interactif est disponible dans [docs/diagrams/autoskills-control-plane.html](diagrams/autoskills-control-plane.html). Sa source versionnée se trouve dans [docs/diagrams/autoskills-control-plane.architecture.json](diagrams/autoskills-control-plane.architecture.json).
+Le diagramme interactif est disponible dans [docs/diagrams/temper-control-plane.html](diagrams/temper-control-plane.html). Sa source versionnée se trouve dans [docs/diagrams/temper-control-plane.architecture.json](diagrams/temper-control-plane.architecture.json).
 
 ## Architecture actuelle
 
@@ -28,7 +28,7 @@ Claude JSONL ─┘                                      │
 
 | Composant | Responsabilité réelle | Limite observée |
 |---|---|---|
-| `cmd/autoskills` | CLI, orchestration du scan, daemon et installation de service | Plusieurs responsabilités produit et plateforme vivent dans un seul fichier. |
+| `cmd/temper` | CLI, orchestration du scan, daemon et installation de service | Plusieurs responsabilités produit et plateforme vivent dans un seul fichier. |
 | `internal/collector` | Découverte et parsing Cursor/Claude vers `canon.Session` | Racines codées depuis le home; pas de collector Codex; résolution Cursor heuristique. |
 | `internal/canon` | Session commune minimale | Les tools, résultats, erreurs, fichiers et outcomes ne forment pas encore un modèle explicite. |
 | `internal/distill` | Préfiltre, prompt, validation de schéma et d’evidence, gardening | Une session utile devient directement une suggestion, sans `Experience` intermédiaire. Depuis HOK-539, tout egress (transcript, contexte existant, garden) passe par `internal/outbound`. |

@@ -7,9 +7,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/cache"
-	"github.com/elcruzo/autoskills/internal/canon"
-	"github.com/elcruzo/autoskills/internal/llm"
+	"github.com/hoklims/temper/internal/cache"
+	"github.com/hoklims/temper/internal/canon"
+	"github.com/hoklims/temper/internal/llm"
 )
 
 func TestSeenContentSkipsDuplicateLLMCall(t *testing.T) {

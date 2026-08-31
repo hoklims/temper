@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // The tests in this file are the hostile half of HOK-540. Each one describes a world that moved
@@ -59,7 +59,7 @@ func TestApplyRefusesAnEditMadeAfterCapture(t *testing.T) {
 func TestRollbackPreservesAnEditMadeAfterApply(t *testing.T) {
 	st, repo, g := journalRepo(t)
 	agents := filepath.Join(repo, "AGENTS.md")
-	edit := "# AGENTS.md\n\nuser edit made while autoskills was mid-mutation\n"
+	edit := "# AGENTS.md\n\nuser edit made while temper was mid-mutation\n"
 
 	setApplyHook(t, func(_ int, op FileOp) error {
 		switch filepath.Base(op.Path) {
@@ -296,7 +296,7 @@ func TestUndoCompensatesTheWholeAcceptedManifest(t *testing.T) {
 	}
 	before := snapshotTree(t, repo)
 
-	st, err := store.Open(filepath.Join(t.TempDir(), "autoskills.db"))
+	st, err := store.Open(filepath.Join(t.TempDir(), "temper.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestUndoCompensatesTheWholeAcceptedManifest(t *testing.T) {
 
 	// the acceptance really did all three things, or the undo below proves nothing
 	after := snapshotTree(t, repo)
-	demoted := ".cursor/skills/autoskills-weak-low-confidence-skill/SKILL.md"
+	demoted := ".cursor/skills/temper-weak-low-confidence-skill/SKILL.md"
 	if _, ok := after[demoted]; !ok {
 		t.Fatalf("setup wrong: the budget did not demote anything: %v", keys(after))
 	}
@@ -361,7 +361,7 @@ func TestDirectorySwappedAfterTheCheckCannotRedirectTheWrite(t *testing.T) {
 	mut := Mutation{
 		Ops: []FileOp{
 			{Root: repo, Path: filepath.Join(repo, "AGENTS.md"), Content: "# AGENTS.md\n"},
-			{Root: repo, Path: filepath.Join(repo, ".cursor", "skills", "autoskills-x", "SKILL.md"), Content: "demoted skill\n"},
+			{Root: repo, Path: filepath.Join(repo, ".cursor", "skills", "temper-x", "SKILL.md"), Content: "demoted skill\n"},
 		},
 		WrittenPath: filepath.Join(repo, "AGENTS.md"),
 	}
@@ -407,7 +407,7 @@ func TestATamperedManifestPathIsNotAnAuthority(t *testing.T) {
 	repo := t.TempDir()
 	outside := t.TempDir()
 	victim := filepath.Join(outside, "important.txt")
-	if err := os.WriteFile(victim, []byte("not autoskills' file\n"), 0o644); err != nil {
+	if err := os.WriteFile(victim, []byte("not temper' file\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -435,7 +435,7 @@ func TestATamperedManifestPathIsNotAnAuthority(t *testing.T) {
 	if err := unwind(&tampered); err == nil {
 		t.Fatal("rolling back through a path outside its authorized root must be refused")
 	}
-	if got := read(t, victim); got != "not autoskills' file\n" {
+	if got := read(t, victim); got != "not temper' file\n" {
 		t.Fatalf("a file outside the repository was touched: %q", got)
 	}
 }

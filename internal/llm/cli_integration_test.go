@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/outbound"
+	"github.com/hoklims/temper/internal/outbound"
 )
 
 func smokePayload(t *testing.T) outbound.Payload {
@@ -25,14 +25,14 @@ func smokePayload(t *testing.T) outbound.Payload {
 }
 
 func TestCodexCannotReadHostCanary(t *testing.T) {
-	if os.Getenv("AUTOSKILLS_CODEX_ISOLATION_SMOKE") == "" {
-		t.Skip("set AUTOSKILLS_CODEX_ISOLATION_SMOKE=1 to probe Codex host isolation")
+	if os.Getenv("TEMPER_CODEX_ISOLATION_SMOKE") == "" {
+		t.Skip("set TEMPER_CODEX_ISOLATION_SMOKE=1 to probe Codex host isolation")
 	}
 	random := make([]byte, 16)
 	if _, err := rand.Read(random); err != nil {
 		t.Fatal(err)
 	}
-	canary := "AUTOSKILLS_CANARY_" + hex.EncodeToString(random)
+	canary := "TEMPER_CANARY_" + hex.EncodeToString(random)
 	path := filepath.Join(t.TempDir(), "canary.txt")
 	if err := os.WriteFile(path, []byte(canary), 0o600); err != nil {
 		t.Fatal(err)
@@ -58,8 +58,8 @@ func TestCodexCannotReadHostCanary(t *testing.T) {
 }
 
 func TestCodexSubscriptionSmoke(t *testing.T) {
-	if os.Getenv("AUTOSKILLS_CODEX_SMOKE") == "" {
-		t.Skip("set AUTOSKILLS_CODEX_SMOKE=1 to use the authenticated Codex CLI")
+	if os.Getenv("TEMPER_CODEX_SMOKE") == "" {
+		t.Skip("set TEMPER_CODEX_SMOKE=1 to use the authenticated Codex CLI")
 	}
 	provider, err := NewCodex("")
 	if err != nil {
@@ -78,8 +78,8 @@ func TestCodexSubscriptionSmoke(t *testing.T) {
 }
 
 func TestClaudeSubscriptionSmoke(t *testing.T) {
-	if os.Getenv("AUTOSKILLS_CLAUDE_SMOKE") == "" {
-		t.Skip("set AUTOSKILLS_CLAUDE_SMOKE=1 to use the authenticated Claude CLI")
+	if os.Getenv("TEMPER_CLAUDE_SMOKE") == "" {
+		t.Skip("set TEMPER_CLAUDE_SMOKE=1 to use the authenticated Claude CLI")
 	}
 	provider, err := NewClaude("")
 	if err != nil {

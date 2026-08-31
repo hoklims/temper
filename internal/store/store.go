@@ -1,5 +1,5 @@
 // Package store persists ingest progress and suggestions in a local SQLite database at
-// ~/.autoskills/autoskills.db. Everything AutoSkills knows lives here — there is no server.
+// ~/.temper/temper.db. Everything Temper knows lives here — there is no cloud service.
 package store
 
 import (
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/hoklims/temper/internal/migrate"
 	_ "modernc.org/sqlite"
 )
 
@@ -57,11 +58,7 @@ type Suggestion struct {
 }
 
 func DefaultPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "autoskills.db"
-	}
-	return filepath.Join(home, ".autoskills", "autoskills.db")
+	return filepath.Join(migrate.CurrentDir(), migrate.CurrentDBName)
 }
 
 func Open(path string) (*Store, error) {
@@ -185,7 +182,7 @@ func (s *Store) migrate() error {
 	}
 	target := latestVersion()
 	if v > target {
-		return fmt.Errorf("store: %s has schema v%d, written by a newer autoskills (this build understands v%d); upgrade autoskills instead of downgrading the database", s.path, v, target)
+		return fmt.Errorf("store: %s has schema v%d, written by a newer temper (this build understands v%d); upgrade temper instead of downgrading the database", s.path, v, target)
 	}
 	if v == target {
 		return nil
@@ -579,7 +576,7 @@ func (s *Store) Reject(id string) error {
 		return err
 	}
 	if inflight > 0 {
-		return fmt.Errorf("%w: suggestion %s; restart autoskills to reconcile it", ErrOperationInFlight, id)
+		return fmt.Errorf("%w: suggestion %s; restart temper to reconcile it", ErrOperationInFlight, id)
 	}
 	if err := decide(tx, id, "pending", "rejected", "", ""); err != nil {
 		return err

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // This file holds the oracles for what happens after a decision stops going forward: a manifest
@@ -163,7 +163,7 @@ func TestGardenerUndoRestoresAJournaledAcceptanceAndRefusesALegacyOne(t *testing
 	}
 	before := snapshotTree(t, repo)
 
-	st, err := store.Open(filepath.Join(t.TempDir(), "autoskills.db"))
+	st, err := store.Open(filepath.Join(t.TempDir(), "temper.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ const suggestions = [
     sensitivity: false,
     confidence: 0.86,
     project: 'orbit',
-    repoRoot: '/Users/elcruzo/Documents/Code/orbit',
+    repoRoot: '/Users/alex/Documents/Code/orbit',
     targetPath: 'AGENTS.md',
     body: '## migrations\n\nAlways run `scripts/migrate.sh` instead of calling alembic directly; it pins the env and runs the post-migration smoke check.',
     rationale:
@@ -33,8 +33,8 @@ const suggestions = [
     placement: 'skill',
     sensitivity: true,
     confidence: 0.62,
-    project: 'autoskills',
-    repoRoot: '/Users/elcruzo/Documents/Code/autoskills',
+    project: 'temper',
+    repoRoot: '/Users/hoklims/Code/temper',
     targetPath: '.cursor/skills/secrets/SKILL.md',
     body: '## secrets\n\nFetch internal API tokens via `op read` at runtime; never write them to .env files.',
     rationale:
@@ -47,9 +47,9 @@ const routes = {
   '/api/stats': () => ({ pending: 2, accepted: 14, rejected: 5, sessions: 41, projects: 3 }),
   '/api/projects': () => ({
     projects: [
-      { name: 'orbit', repoRoot: '/Users/elcruzo/Documents/Code/orbit', pending: 1 },
-      { name: 'autoskills', repoRoot: '/Users/elcruzo/Documents/Code/autoskills', pending: 1 },
-      { name: 'trace', repoRoot: '/Users/elcruzo/Desktop/Trace/components', pending: 0 },
+      { name: 'orbit', repoRoot: '/Users/alex/Documents/Code/orbit', pending: 1 },
+      { name: 'temper', repoRoot: '/Users/hoklims/Code/temper', pending: 1 },
+      { name: 'trace', repoRoot: '/Users/alex/Desktop/Trace/components', pending: 0 },
     ],
   }),
 }
@@ -58,7 +58,7 @@ createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost')
   res.setHeader('Content-Type', 'application/json')
   if (req.method === 'POST' && /^\/api\/suggestions\/[^/]+\/decision$/.test(url.pathname)) {
-    res.end(JSON.stringify({ ok: true, writtenPath: '/Users/elcruzo/Documents/Code/orbit/AGENTS.md' }))
+    res.end(JSON.stringify({ ok: true, writtenPath: '/Users/alex/Documents/Code/orbit/AGENTS.md' }))
     return
   }
   if (url.pathname === '/api/suggestions') {

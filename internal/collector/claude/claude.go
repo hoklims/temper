@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/canon"
+	"github.com/hoklims/temper/internal/canon"
 )
 
 type Adapter struct {

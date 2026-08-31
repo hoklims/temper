@@ -11,12 +11,12 @@ import (
 // resolveFrom at a temp root instead of "/".
 func TestResolveFromHandlesDashedDirNames(t *testing.T) {
 	root := t.TempDir()
-	// <root>/Users/elcruzo/Documents/Code/YC-Hackathon (dir name contains a dash)
-	deep := filepath.Join(root, "Users", "elcruzo", "Documents", "Code", "YC-Hackathon")
+	// <root>/Users/alex/Documents/Code/YC-Hackathon (dir name contains a dash)
+	deep := filepath.Join(root, "Users", "alex", "Documents", "Code", "YC-Hackathon")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	got := resolveFrom(root, strings.Split("Users-elcruzo-Documents-Code-YC-Hackathon", "-"))
+	got := resolveFrom(root, strings.Split("Users-alex-Documents-Code-YC-Hackathon", "-"))
 	if got != deep {
 		t.Fatalf("resolveFrom = %q, want %q", got, deep)
 	}

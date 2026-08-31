@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/outbound"
+	"github.com/hoklims/temper/internal/outbound"
 )
 
 const testOutputSchema = `{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}`
@@ -30,9 +30,10 @@ type helperInvocation struct {
 	CodexHomeMode    uint32   `json:"codex_home_mode,omitempty"`
 	SystemPrompt     string   `json:"system_prompt,omitempty"`
 	EnvironmentLeaks []string `json:"environment_leaks,omitempty"`
-	// AutoSkillsNames is every AUTOSKILLS_* variable the child can see, by name. A named list
+	// ProductNames is every TEMPER_* or legacy AUTOSKILLS_* variable the child can see, by name.
+	// A named list
 	// would only prove the absence of names someone remembered to write down.
-	AutoSkillsNames []string `json:"autoskills_names,omitempty"`
+	ProductNames []string `json:"product_names,omitempty"`
 	// PathPresent proves the child kept the environment it needs to run: an empty environment
 	// would pass every absence assertion above while breaking the provider.
 	PathPresent bool `json:"path_present,omitempty"`
@@ -79,18 +80,19 @@ func TestCLIHelper(t *testing.T) {
 			environmentLeaks = append(environmentLeaks, name)
 		}
 	}
-	var autoSkillsNames []string
+	var productNames []string
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
-		if strings.HasPrefix(strings.ToUpper(name), "AUTOSKILLS_") {
-			autoSkillsNames = append(autoSkillsNames, name)
+		upper := strings.ToUpper(name)
+		if strings.HasPrefix(upper, "TEMPER_") || strings.HasPrefix(upper, "AUTOSKILLS_") {
+			productNames = append(productNames, name)
 		}
 	}
 	_, pathPresent := os.LookupEnv("PATH")
 	if !pathPresent {
 		_, pathPresent = os.LookupEnv("Path") // Windows preserves the case it was given
 	}
-	invocation, _ := json.Marshal(helperInvocation{Args: args, Dir: dir, Stdin: string(stdin), CodexHome: codexHome, CodexAuthTarget: codexAuthTarget, CodexAuthRegular: codexAuthRegular, CodexHomeMode: codexHomeMode, SystemPrompt: systemPrompt, EnvironmentLeaks: environmentLeaks, AutoSkillsNames: autoSkillsNames, PathPresent: pathPresent})
+	invocation, _ := json.Marshal(helperInvocation{Args: args, Dir: dir, Stdin: string(stdin), CodexHome: codexHome, CodexAuthTarget: codexAuthTarget, CodexAuthRegular: codexAuthRegular, CodexHomeMode: codexHomeMode, SystemPrompt: systemPrompt, EnvironmentLeaks: environmentLeaks, ProductNames: productNames, PathPresent: pathPresent})
 	switch os.Getenv("TEST_CLI_HELPER_BEHAVIOR") {
 	case "exit":
 		_, _ = fmt.Fprint(os.Stderr, "authentication required")
@@ -252,7 +254,7 @@ func TestCodexProviderInvocationIsEphemeralAndNeutral(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := decodeInvocation(t, out)
-	if pathWithin(originalDir, got.Dir) || !strings.Contains(filepath.Base(got.Dir), "autoskills-llm-") {
+	if pathWithin(originalDir, got.Dir) || !strings.Contains(filepath.Base(got.Dir), "temper-llm-") {
 		t.Fatalf("working directory is not neutral: %q", got.Dir)
 	}
 	wantPrefix := []string{"exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--strict-config", "-c", "project_doc_max_bytes=0", "-c", "mcp_servers={}", "--enable", "skip_host_skill_discovery", "--disable", "shell_tool", "--disable", "unified_exec", "--disable", "shell_snapshot", "--disable", "code_mode", "--disable", "code_mode_host", "--disable", "code_mode_only", "--disable", "multi_agent", "--disable", "browser_use", "--disable", "browser_use_external", "--disable", "browser_use_full_cdp_access", "--disable", "in_app_browser", "--disable", "computer_use", "--disable", "apps", "--disable", "plugins", "--disable", "plugin_sharing", "--disable", "remote_plugin", "--disable", "hooks", "--disable", "skill_search", "--disable", "skill_mcp_dependency_install", "--disable", "tool_suggest", "--disable", "tool_call_mcp_elicitation", "--disable", "auth_elicitation", "--disable", "goals", "--disable", "workspace_dependencies", "--disable", "in_app_chat", "--disable", "in_app_local_automation", "--disable", "in_app_updates", "--disable", "image_generation", "--disable", "view_image", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never", "--model", "gpt-test", "--cd", got.Dir, "--output-schema"}
@@ -291,31 +293,33 @@ func TestCodexProviderInvocationIsEphemeralAndNeutral(t *testing.T) {
 	}
 }
 
-// AutoSkills' own configuration is the credential path of the HTTP provider. A CLI child runs on
+// Temper's own configuration is the credential path of the HTTP provider. A CLI child runs on
 // its own subscription authentication and has no use for it — and a subprocess that can read
-// AUTOSKILLS_ENDPOINT or AUTOSKILLS_PROVIDER can also be steered by them. The assertion is exact
+// TEMPER_ENDPOINT or TEMPER_PROVIDER can also be steered by them. The assertion is exact
 // absence of the whole prefix, not the absence of a list someone remembered to write down.
-func TestCLIProvidersDoNotLeakAutoSkillsEnvironment(t *testing.T) {
+func TestCLIProvidersDoNotLeakTemperEnvironment(t *testing.T) {
 	for name, makeProvider := range map[string]func(*testing.T) Provider{
 		"codex":  func(t *testing.T) Provider { return newTestCodexProvider(t, "", helperTimeout) },
 		"claude": func(*testing.T) Provider { return newClaudeProvider(helperCommand(), "", helperTimeout) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv("TEST_CLI_HELPER_BEHAVIOR", "success")
-			t.Setenv("AUTOSKILLS_API_KEY", "must-not-reach-the-cli")
-			t.Setenv("AUTOSKILLS_PROVIDER", "http")
-			t.Setenv("AUTOSKILLS_ENDPOINT", "https://gateway.attacker.example/v1")
-			t.Setenv("AUTOSKILLS_MODEL", "must-not-reach-the-cli")
-			t.Setenv("AUTOSKILLS_SOMETHING_ADDED_LATER", "must-not-reach-the-cli")
-			t.Setenv("AutoSkills_Api_Key", "must-not-reach-the-cli")
+			t.Setenv("TEMPER_API_KEY", "must-not-reach-the-cli")
+			t.Setenv("TEMPER_PROVIDER", "http")
+			t.Setenv("TEMPER_ENDPOINT", "https://gateway.attacker.example/v1")
+			t.Setenv("TEMPER_MODEL", "must-not-reach-the-cli")
+			t.Setenv("TEMPER_SOMETHING_ADDED_LATER", "must-not-reach-the-cli")
+			t.Setenv("Temper_Api_Key", "must-not-reach-the-cli")
+			t.Setenv("AUTOSKILLS_API_KEY", "legacy-must-not-reach-the-cli")
+			t.Setenv("AUTOSKILLS_SOMETHING_ADDED_LATER", "legacy-must-not-reach-the-cli")
 
 			out, err := makeProvider(t).Generate(context.Background(), preparedPayload(t))
 			if err != nil {
 				t.Fatal(err)
 			}
 			got := decodeInvocation(t, out)
-			if len(got.AutoSkillsNames) != 0 {
-				t.Fatalf("AutoSkills configuration reached the CLI child: %v", got.AutoSkillsNames)
+			if len(got.ProductNames) != 0 {
+				t.Fatalf("Temper or legacy AutoSkills configuration reached the CLI child: %v", got.ProductNames)
 			}
 			if len(got.EnvironmentLeaks) != 0 {
 				t.Fatalf("provider credentials reached the CLI child: %v", got.EnvironmentLeaks)
@@ -431,7 +435,7 @@ func TestClaudeProviderInvocationIsSafeAndNonPersistent(t *testing.T) {
 	if strings.Contains(got.Stdin, "sk-ant-api03-") {
 		t.Fatal("unredacted input reached Claude")
 	}
-	if !strings.Contains(filepath.Base(got.Dir), "autoskills-llm-") {
+	if !strings.Contains(filepath.Base(got.Dir), "temper-llm-") {
 		t.Fatalf("working directory is not neutral: %q", got.Dir)
 	}
 	if len(got.EnvironmentLeaks) != 0 {
@@ -696,7 +700,7 @@ func TestCLIProviderWorksFromFilesystemRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := decodeInvocation(t, out).Dir; !strings.Contains(filepath.Base(got), "autoskills-llm-") {
+	if got := decodeInvocation(t, out).Dir; !strings.Contains(filepath.Base(got), "temper-llm-") {
 		t.Fatalf("working directory is not neutral: %q", got)
 	}
 }

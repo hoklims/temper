@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/elcruzo/autoskills/internal/canon"
+	"github.com/hoklims/temper/internal/canon"
 )
 
 // The pre-filter is the cheap, deterministic stage that runs BEFORE any LLM call — the same

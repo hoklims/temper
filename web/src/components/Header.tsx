@@ -17,7 +17,7 @@ export function Header({ stats }: HeaderProps) {
             <path d="M4.5 7l2.5 2-2.5 2" stroke="var(--color-dark)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M9.5 11.5h4" stroke="var(--color-dark)" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
-          <span className="header__logo-label">autoskills</span>
+          <span className="header__logo-label">temper</span>
         </div>
         {stats && <StatBar stats={stats} />}
       </div>

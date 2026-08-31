@@ -86,7 +86,7 @@ func TestKeepsLoopbackAndNormalUrls(t *testing.T) {
 	cases := []string{
 		"open http://localhost:3000 to check the fix",
 		"the dashboard runs on http://127.0.0.1:4517",
-		"see https://github.com/elcruzo/autoskills/issues/12",
+		"see https://github.com/hoklims/temper/issues/12",
 	}
 	for _, c := range cases {
 		if got := Text(c); got != c {

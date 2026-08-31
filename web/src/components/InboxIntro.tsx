@@ -5,7 +5,7 @@ export function InboxIntro() {
     <section className="inbox-intro" aria-labelledby="inbox-title">
       <span className="inbox-intro__eyebrow mono-label">how review works</span>
       <h1 id="inbox-title" className="inbox-intro__heading">
-        Review the rules AutoSkills learned from your sessions.
+        Review the rules Temper learned from your sessions.
       </h1>
       <ol className="inbox-intro__steps">
         <li className="inbox-intro__step">

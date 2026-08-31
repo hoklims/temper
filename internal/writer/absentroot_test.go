@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
-// An authorized root that does not exist yet — ~/.autoskills/skills on a fresh machine — cannot be
+// An authorized root that does not exist yet — ~/.temper/skills on a fresh machine — cannot be
 // identified at capture time, because there is no object to identify. What is captured instead is
 // the deepest ancestor that DOES exist, plus the confined suffix leading to the root. The mutation
 // may then create that suffix, but only through the ancestor it proved, and it must record which
@@ -28,7 +28,7 @@ func absentRootMutation(t *testing.T) (mut Mutation, anchor, root, target string
 	if err := os.Mkdir(anchor, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	root = filepath.Join(anchor, "autoskills", "skills")
+	root = filepath.Join(anchor, "temper", "skills")
 	target = filepath.Join(root, "rule.md")
 	mut = Mutation{Ops: []FileOp{{Root: root, Path: target, Content: "planned before the root existed\n"}}, WrittenPath: target}
 	if err := capture(&mut); err != nil {
@@ -77,7 +77,7 @@ func TestAbsentRootRefusesAReplacedAncestor(t *testing.T) {
 	if len(entries) != 0 {
 		t.Fatalf("the mutation wrote into the directory that replaced its ancestor: %v", entries)
 	}
-	if mut.Roots[filepath.Clean(anchor+string(filepath.Separator)+"autoskills"+string(filepath.Separator)+"skills")].RootID.known() {
+	if mut.Roots[filepath.Clean(anchor+string(filepath.Separator)+"temper"+string(filepath.Separator)+"skills")].RootID.known() {
 		t.Fatal("a refused mutation bound a root identity anyway")
 	}
 }
@@ -92,7 +92,7 @@ func TestAbsentRootBindsTheDirectoryItActuallyWroteInto(t *testing.T) {
 		t.Fatal(err)
 	}
 	theirs := filepath.Join(root, "theirs.txt")
-	if err := os.WriteFile(theirs, []byte("not autoskills' file\n"), 0o644); err != nil {
+	if err := os.WriteFile(theirs, []byte("not temper' file\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +113,7 @@ func TestAbsentRootBindsTheDirectoryItActuallyWroteInto(t *testing.T) {
 	if got := read(t, target); got != "planned before the root existed\n" {
 		t.Fatalf("the artifact was not written: %q", got)
 	}
-	if got := read(t, theirs); got != "not autoskills' file\n" {
+	if got := read(t, theirs); got != "not temper' file\n" {
 		t.Fatalf("the mutation disturbed a file it found in the directory: %q", got)
 	}
 	// and the rollback proves the same object again rather than re-deriving it
@@ -123,7 +123,7 @@ func TestAbsentRootBindsTheDirectoryItActuallyWroteInto(t *testing.T) {
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
 		t.Fatalf("the rollback left the artifact behind: %v", err)
 	}
-	if got := read(t, theirs); got != "not autoskills' file\n" {
+	if got := read(t, theirs); got != "not temper' file\n" {
 		t.Fatalf("the rollback deleted a file it never wrote: %q", got)
 	}
 }
@@ -158,7 +158,7 @@ func TestReconcileDoesNotAdoptARootItNeverBound(t *testing.T) {
 		t.Fatal(err)
 	}
 	stranger := filepath.Join(root, "someone-elses.md")
-	if err := os.WriteFile(stranger, []byte("made by a human, not by autoskills\n"), 0o644); err != nil {
+	if err := os.WriteFile(stranger, []byte("made by a human, not by temper\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -172,7 +172,7 @@ func TestReconcileDoesNotAdoptARootItNeverBound(t *testing.T) {
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
 		t.Fatalf("reconciliation finished the mutation inside a directory it never created: %v", err)
 	}
-	if got := read(t, stranger); got != "made by a human, not by autoskills\n" {
+	if got := read(t, stranger); got != "made by a human, not by temper\n" {
 		t.Fatalf("reconciliation disturbed the directory it found: %q", got)
 	}
 	stored, err := st.GetSuggestion(g.ID)

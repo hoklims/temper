@@ -12,7 +12,7 @@ import (
 
 func openTemp(t *testing.T) *Store {
 	t.Helper()
-	st, err := Open(filepath.Join(t.TempDir(), "autoskills.db"))
+	st, err := Open(filepath.Join(t.TempDir(), "temper.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestFreshDatabaseIsStampedAtLatestVersion(t *testing.T) {
 // missing, and leave a backup of the pre-migration file.
 func TestLegacyDatabaseIsMigratedWithBackupAndKeepsData(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "autoskills.db")
+	path := filepath.Join(dir, "temper.db")
 
 	legacy, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -129,7 +129,7 @@ INSERT INTO ingest_files(path, bytes_processed, updated_at) VALUES('/t/a.jsonl',
 }
 
 func TestOpenRefusesCorruptDatabase(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "autoskills.db")
+	path := filepath.Join(t.TempDir(), "temper.db")
 	if err := os.WriteFile(path, []byte("this is not a SQLite database, it is a text file"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestOpenRefusesCorruptDatabase(t *testing.T) {
 }
 
 func TestOpenRefusesFutureSchema(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "autoskills.db")
+	path := filepath.Join(t.TempDir(), "temper.db")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -165,9 +165,9 @@ func TestOpenRefusesFutureSchema(t *testing.T) {
 	opened, err := Open(path)
 	if err == nil {
 		opened.Close()
-		t.Fatal("a database from a newer autoskills must be refused")
+		t.Fatal("a database from a newer temper must be refused")
 	}
-	if !strings.Contains(err.Error(), "999") || !strings.Contains(err.Error(), "newer autoskills") {
+	if !strings.Contains(err.Error(), "999") || !strings.Contains(err.Error(), "newer temper") {
 		t.Fatalf("error should name the version conflict: %v", err)
 	}
 }
@@ -178,7 +178,7 @@ func TestOpenRefusesFutureSchema(t *testing.T) {
 // one moment with no safe answer left. It has to be refused at open time instead, and never
 // re-migrated: a re-migration would stamp the same version over the same gap.
 func TestOpenRefusesLatestVersionWithAMissingTable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "autoskills.db")
+	path := filepath.Join(t.TempDir(), "temper.db")
 	st, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func TestOpenRefusesLatestVersionWithAMissingTable(t *testing.T) {
 // The same refusal at column granularity: a v2-shaped operations table stamped v3 is exactly what
 // an interrupted hand-repair leaves, and it is physically valid.
 func TestOpenRefusesLatestVersionWithAMissingColumn(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "autoskills.db")
+	path := filepath.Join(t.TempDir(), "temper.db")
 	st, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +285,7 @@ func TestOpenRefusesLatestVersionWithAMissingColumn(t *testing.T) {
 // none of the failed step's schema changes and a backup to fall back on.
 func TestFailingMigrationRollsBackAndKeepsVersion(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "autoskills.db")
+	path := filepath.Join(dir, "temper.db")
 	st, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -511,7 +511,7 @@ func TestResourceClaimRefusesAnotherSuggestionOnTheSameFile(t *testing.T) {
 // the contested file reserved for the reconciliation that follows the restart.
 func TestResourceClaimSurvivesReopen(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "autoskills.db")
+	path := filepath.Join(dir, "temper.db")
 	st, err := Open(path)
 	if err != nil {
 		t.Fatal(err)

@@ -8,7 +8,7 @@ Claude Code, Codex et Cursor n’emploient ni les mêmes fichiers ni les mêmes 
 
 ## Décision
 
-AutoSkills conserve une source canonique locale pour les Experiences, les skills et leur lifecycle. Des adapters génèrent ensuite les sorties natives de chaque runtime. Le registry et les outputs restent séparés.
+Temper conserve une source canonique locale pour les Experiences, les skills et leur lifecycle. Des adapters génèrent ensuite les sorties natives de chaque runtime. Le registry et les outputs restent séparés.
 
 Les writers sont idempotents, atomiques, diffables et réversibles. Ils ne modifient jamais le contenu utilisateur hors des sections gérées. Aucun symlink n’est requis : Windows reste une plateforme de premier rang.
 

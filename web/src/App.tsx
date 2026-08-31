@@ -25,7 +25,7 @@ const VIEW_STATUS: Record<Exclude<View, 'projects'>, SuggestionStatus> = {
 }
 
 const EMPTY_COPY: Record<Exclude<View, 'projects'>, string> = {
-  inbox: 'no suggestions yet — run autoskills scan.',
+  inbox: 'no suggestions yet — run temper scan.',
   accepted: 'no accepted skills yet.',
   rejected: 'no rejected suggestions yet.',
 }
@@ -139,7 +139,7 @@ export default function App() {
             </div>
           )}
           {offline && !loading ? (
-            <EmptyState hint="daemon unreachable" message="could not reach the autoskills daemon — start it and reload." />
+            <EmptyState hint="daemon unreachable" message="could not reach the temper daemon — start it and reload." />
           ) : loading ? (
             <p className="app__loading mono-label">loading</p>
           ) : view === 'projects' ? (

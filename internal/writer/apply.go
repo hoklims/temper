@@ -16,7 +16,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // A mutation is planned in full before anything moves. Accepting a suggestion can touch several
@@ -974,7 +974,7 @@ func unwind(m *Mutation) error {
 // overwritten rather than followed. Every step is named relative to the root handle, so no
 // component of the path can be swapped between the check and the write.
 //
-// The deferred Remove names the exact file this call created and nothing else. AutoSkills does not
+// The deferred Remove names the exact file this call created and nothing else. Temper does not
 // collect temporaries by prefix: a name is not a proof of ownership, and a process that dies
 // mid-write leaves an orphan that is untidy — whereas a sweep would delete a user's own file, or a
 // live temporary belonging to another mutation in flight, on nothing but a matching name.
@@ -1008,7 +1008,7 @@ func atomicWrite(r *os.Root, dir, rel string, data []byte, mode fs.FileMode) err
 }
 
 const (
-	tempPrefix = ".autoskills-"
+	tempPrefix = ".temper-"
 	tempSuffix = ".tmp"
 )
 
@@ -1360,13 +1360,13 @@ func Reconcile(st *store.Store) ([]string, error) {
 		}
 		mut, dErr := decodeManifest(op.Manifest)
 		if dErr != nil {
-			return report, fmt.Errorf("operation %s is %s and its manifest is not a shape this build acts on (%v); no file was touched and the ones it names stay reserved — resolve them by hand, `autoskills status` lists the operation",
+			return report, fmt.Errorf("operation %s is %s and its manifest is not a shape this build acts on (%v); no file was touched and the ones it names stay reserved — resolve them by hand, `temper status` lists the operation",
 				op.ID, op.State, dErr)
 		}
 		switch op.State {
 		case store.OpRollingBack:
 			if uErr := unwind(&mut); uErr != nil {
-				return report, fmt.Errorf("operation %s was rolling back when it was interrupted and cannot be restored (%v); the files it names are still reserved — resolve them by hand, `autoskills status` lists the operation", op.ID, uErr)
+				return report, fmt.Errorf("operation %s was rolling back when it was interrupted and cannot be restored (%v); the files it names are still reserved — resolve them by hand, `temper status` lists the operation", op.ID, uErr)
 			}
 			if rErr := st.FinishRollback(op.ID, "reconciled: restoration resumed after an interrupted rollback"); rErr != nil {
 				return report, rErr
@@ -1409,7 +1409,7 @@ func restore(st *store.Store, op store.Operation, mut *Mutation, cause error) (s
 		return "", fmt.Errorf("operation %s can neither be completed (%v) nor marked for rollback (%v); the files it names are still reserved — resolve them by hand", op.ID, cause, mErr)
 	}
 	if uErr := unwind(mut); uErr != nil {
-		return "", fmt.Errorf("operation %s can neither be completed (%v) nor restored (%v); the files it names are still reserved — resolve them by hand, `autoskills status` lists the operation", op.ID, cause, uErr)
+		return "", fmt.Errorf("operation %s can neither be completed (%v) nor restored (%v); the files it names are still reserved — resolve them by hand, `temper status` lists the operation", op.ID, cause, uErr)
 	}
 	if rErr := st.FinishRollback(op.ID, cause.Error()); rErr != nil {
 		return "", rErr
