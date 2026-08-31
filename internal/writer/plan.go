@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/elcruzo/autoskills/internal/config"
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/config"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // Kind enumerates the artifacts the writer knows how to produce. There is no other destination.
@@ -31,8 +31,11 @@ const (
 )
 
 // managedMarkers must never appear in content: a body carrying them could close or forge an
-// autoskills-managed block and take over a region of AGENTS.md it was not granted.
-var managedMarkers = []string{"autoskills:begin", "autoskills:end", "autoskills:section", "autoskills:demoted"}
+// temper-managed block and take over a region of AGENTS.md it was not granted.
+var managedMarkers = []string{
+	"temper:begin", "temper:end", "temper:section", "temper:demoted",
+	"autoskills:begin", "autoskills:end", "autoskills:section", "autoskills:demoted",
+}
 
 // Plan is the deterministic answer to "what exactly would accepting this touch?", computed
 // locally from the suggestion — never from anything the model said about where it belongs.
@@ -109,7 +112,7 @@ func BuildPlan(g store.Suggestion) (Plan, error) {
 		if err := confine(root, path); err != nil {
 			return Plan{}, err
 		}
-		return Plan{Kind: KindMachineSkill, Path: path, Root: root, Rel: "~/.autoskills/skills/" + slug(title) + ".md"}, nil
+		return Plan{Kind: KindMachineSkill, Path: path, Root: root, Rel: "~/.temper/skills/" + slug(title) + ".md"}, nil
 	}
 
 	root := g.RepoRoot
@@ -128,9 +131,9 @@ func BuildPlan(g store.Suggestion) (Plan, error) {
 		}
 		var rel string
 		if placement == "path_scoped" {
-			rel = filepath.Join(".cursor", "rules", "autoskills-"+slug(title)+".mdc")
+			rel = filepath.Join(".cursor", "rules", "temper-"+slug(title)+".mdc")
 		} else {
-			rel = filepath.Join(".cursor", "skills", "autoskills-"+slug(title), "SKILL.md")
+			rel = filepath.Join(".cursor", "skills", "temper-"+slug(title), "SKILL.md")
 		}
 		path := filepath.Join(root, rel)
 		if err := confine(root, path); err != nil {

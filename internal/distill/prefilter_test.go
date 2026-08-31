@@ -3,7 +3,7 @@ package distill
 import (
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/canon"
+	"github.com/hoklims/temper/internal/canon"
 )
 
 func sess(turns ...canon.Turn) *canon.Session {

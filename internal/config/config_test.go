@@ -8,12 +8,40 @@ import (
 
 func writeConfig(t *testing.T, raw string) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(Dir(), "config.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadSupportsLegacyEnvironmentWithTemperPrecedence(t *testing.T) {
+	writeConfig(t, `{}`)
+	for _, name := range []string{"TEMPER_PROVIDER", "TEMPER_MODEL", "AUTOSKILLS_PROVIDER", "AUTOSKILLS_MODEL"} {
+		unsetEnv(t, name)
+	}
+	t.Setenv("AUTOSKILLS_PROVIDER", "codex")
+	t.Setenv("AUTOSKILLS_MODEL", "legacy-model")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Provider != "codex" || cfg.Model != "legacy-model" {
+		t.Fatalf("legacy env not applied: %+v", cfg)
+	}
+
+	t.Setenv("TEMPER_PROVIDER", "claude")
+	t.Setenv("TEMPER_MODEL", "temper-model")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Provider != "claude" || cfg.Model != "temper-model" {
+		t.Fatalf("Temper env did not win: %+v", cfg)
 	}
 }
 
@@ -26,10 +54,10 @@ func unsetEnv(t *testing.T, name string) {
 }
 
 func TestLoadProviderCompatibility(t *testing.T) {
-	unsetEnv(t, "AUTOSKILLS_PROVIDER")
-	t.Setenv("AUTOSKILLS_MODEL", "")
-	t.Setenv("AUTOSKILLS_ENDPOINT", "")
-	t.Setenv("AUTOSKILLS_API_KEY", "")
+	unsetEnv(t, "TEMPER_PROVIDER")
+	t.Setenv("TEMPER_MODEL", "")
+	t.Setenv("TEMPER_ENDPOINT", "")
+	t.Setenv("TEMPER_API_KEY", "")
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
 	for _, tc := range []struct {
@@ -60,7 +88,7 @@ func TestLoadProviderCompatibility(t *testing.T) {
 }
 
 func TestLoadRejectsUnknownProvider(t *testing.T) {
-	unsetEnv(t, "AUTOSKILLS_PROVIDER")
+	unsetEnv(t, "TEMPER_PROVIDER")
 	writeConfig(t, `{"provider":"other"}`)
 	if _, err := Load(); err == nil {
 		t.Fatal("unknown provider must fail")
@@ -68,7 +96,7 @@ func TestLoadRejectsUnknownProvider(t *testing.T) {
 }
 
 func TestLoadRejectsExplicitlyInvalidProvider(t *testing.T) {
-	unsetEnv(t, "AUTOSKILLS_PROVIDER")
+	unsetEnv(t, "TEMPER_PROVIDER")
 	for _, raw := range []string{
 		`{"provider":null}`,
 		`{"provider":""}`,
@@ -90,7 +118,7 @@ func TestLoadRejectsExplicitlyInvalidProvider(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidFileProviderBeforeEnvironmentOverride(t *testing.T) {
-	t.Setenv("AUTOSKILLS_PROVIDER", "codex")
+	t.Setenv("TEMPER_PROVIDER", "codex")
 	for _, raw := range []string{`{"provider":null}`, `{"Provider":"other"}`} {
 		t.Run(raw, func(t *testing.T) {
 			writeConfig(t, raw)
@@ -102,7 +130,7 @@ func TestLoadRejectsInvalidFileProviderBeforeEnvironmentOverride(t *testing.T) {
 }
 
 func TestLoadAcceptsValidProviderEnvironmentOverride(t *testing.T) {
-	t.Setenv("AUTOSKILLS_PROVIDER", "claude")
+	t.Setenv("TEMPER_PROVIDER", "claude")
 	writeConfig(t, `{"provider":"http"}`)
 	cfg, err := Load()
 	if err != nil {
@@ -117,7 +145,7 @@ func TestLoadRejectsInvalidProviderEnvironment(t *testing.T) {
 	writeConfig(t, `{}`)
 	for _, value := range []string{"", " ", "other"} {
 		t.Run(value, func(t *testing.T) {
-			t.Setenv("AUTOSKILLS_PROVIDER", value)
+			t.Setenv("TEMPER_PROVIDER", value)
 			if _, err := Load(); err == nil {
 				t.Fatalf("provider environment %q must fail", value)
 			}
@@ -126,8 +154,8 @@ func TestLoadRejectsInvalidProviderEnvironment(t *testing.T) {
 }
 
 func TestLoadOnlyInheritsCredentialsForOfficialHTTPSHosts(t *testing.T) {
-	unsetEnv(t, "AUTOSKILLS_PROVIDER")
-	unsetEnv(t, "AUTOSKILLS_API_KEY")
+	unsetEnv(t, "TEMPER_PROVIDER")
+	unsetEnv(t, "TEMPER_API_KEY")
 	t.Setenv("ANTHROPIC_API_KEY", "anthropic-secret")
 	t.Setenv("OPENAI_API_KEY", "openai-secret")
 
@@ -158,7 +186,7 @@ func TestLoadOnlyInheritsCredentialsForOfficialHTTPSHosts(t *testing.T) {
 }
 
 func TestLoadClearsInheritedModelWhenProviderChanges(t *testing.T) {
-	unsetEnv(t, "AUTOSKILLS_MODEL")
+	unsetEnv(t, "TEMPER_MODEL")
 	for _, tc := range []struct {
 		name     string
 		file     string
@@ -170,7 +198,7 @@ func TestLoadClearsInheritedModelWhenProviderChanges(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			writeConfig(t, tc.file)
-			t.Setenv("AUTOSKILLS_PROVIDER", tc.provider)
+			t.Setenv("TEMPER_PROVIDER", tc.provider)
 			cfg, err := Load()
 			if err != nil {
 				t.Fatal(err)
@@ -184,8 +212,8 @@ func TestLoadClearsInheritedModelWhenProviderChanges(t *testing.T) {
 
 func TestLoadKeepsExplicitEnvironmentModelWhenProviderChanges(t *testing.T) {
 	writeConfig(t, `{"provider":"http","model":"http-model"}`)
-	t.Setenv("AUTOSKILLS_PROVIDER", "codex")
-	t.Setenv("AUTOSKILLS_MODEL", "codex-model")
+	t.Setenv("TEMPER_PROVIDER", "codex")
+	t.Setenv("TEMPER_MODEL", "codex-model")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)

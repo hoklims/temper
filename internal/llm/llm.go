@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/outbound"
+	"github.com/hoklims/temper/internal/outbound"
 )
 
 type Client struct {

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/elcruzo/autoskills/internal/canon"
+	"github.com/hoklims/temper/internal/canon"
 )
 
 // Adapter is the contract a tool integration implements. Supporting a new tool = one adapter.

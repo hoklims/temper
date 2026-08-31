@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// AutoSkills deletes exactly one temporary file: the one the current write created, by its exact
+// Temper deletes exactly one temporary file: the one the current write created, by its exact
 // name. It does not collect by prefix, and these tests are why.
 //
 // A prefix is not a proof of ownership. It matches a file a user happened to name that way, and it
@@ -15,7 +15,7 @@ import (
 // died is untidy and harmless; a sweep that removes either of those two is neither.
 
 // A file the user owns, sitting in the directory a mutation is about to write in, and named the
-// way autoskills names its own temporaries. Nothing in the manifest mentions it, so nothing may
+// way temper names its own temporaries. Nothing in the manifest mentions it, so nothing may
 // remove it.
 func TestAMutationLeavesAUserFileThatLooksLikeATemporary(t *testing.T) {
 	root := t.TempDir()

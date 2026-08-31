@@ -1,5 +1,5 @@
 // Package writer emits accepted suggestions into the context files agents actually read.
-// All writes are idempotent: repo-file content lives inside autoskills-managed marker blocks
+// All writes are idempotent: repo-file content lives inside temper-managed marker blocks
 // keyed by suggestion id, so re-accepting updates in place and never clobbers hand-written text.
 package writer
 
@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // writeUnjournaled places a suggestion's artifact and returns the path written. It is atomic and
@@ -51,9 +51,9 @@ func writeUnjournaled(g store.Suggestion) (string, error) {
 // before the first mutation.
 //
 // Routing:
-//   - scope=machine                  -> ~/.autoskills/skills/<slug>.md
-//   - placement=path_scoped (repo)   -> <repo>/.cursor/rules/autoskills-<slug>.mdc
-//   - placement=skill (repo)         -> <repo>/.cursor/skills/autoskills-<slug>/SKILL.md
+//   - scope=machine                  -> ~/.temper/skills/<slug>.md
+//   - placement=path_scoped (repo)   -> <repo>/.cursor/rules/temper-<slug>.mdc
+//   - placement=skill (repo)         -> <repo>/.cursor/skills/temper-<slug>/SKILL.md
 //   - placement=always_on (repo)     -> managed block in <repo>/AGENTS.md (+ CLAUDE.md import line if needed)
 func BuildMutation(g store.Suggestion) (Mutation, error) {
 	plan, err := BuildPlan(g)
@@ -99,23 +99,29 @@ func cursorRuleContent(g store.Suggestion) (string, error) {
 }
 
 // repoSkillContent renders an on-demand skill file. Shell fences in the body stay what they are —
-// inert Markdown a human reads and runs deliberately. AutoSkills used to extract them into an
+// inert Markdown a human reads and runs deliberately. Temper used to extract them into an
 // executable run.sh (0755) next to the skill; that turned model-authored text into a program on
 // disk and was removed in HOK-539. No artifact this package writes is executable.
 func repoSkillContent(g store.Suggestion) string {
 	return fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n", slug(g.Title), yamlEscape(g.Title), g.Body)
 }
 
-// AGENTS.md layout: all autoskills content lives inside ONE managed section, grouped by skill
+// AGENTS.md layout: all temper content lives inside ONE managed section, grouped by skill
 // kind so related skills read together instead of accumulating chronologically at file end.
 const (
-	sectionBegin = "<!-- autoskills:section:begin -->"
-	sectionEnd   = "<!-- autoskills:section:end -->"
+	sectionBegin = "<!-- temper:section:begin -->"
+	sectionEnd   = "<!-- temper:section:end -->"
 )
 
 var (
-	blockRe   = regexp.MustCompile(`(?s)<!-- autoskills:begin id=([^ >]+)(?: group=([a-z]+))?(?: conf=([0-9.]+))? -->\n?(.*?)\n?<!-- autoskills:end id=[^ >]+ -->\n?`)
-	sectionRe = regexp.MustCompile(`(?s)\n?` + regexp.QuoteMeta(sectionBegin) + `.*?` + regexp.QuoteMeta(sectionEnd) + `\n?`)
+	blockRes = []*regexp.Regexp{
+		regexp.MustCompile(`(?s)<!-- temper:begin id=([^ >]+)(?: group=([a-z]+))?(?: conf=([0-9.]+))? -->\n?(.*?)\n?<!-- temper:end id=[^ >]+ -->\n?`),
+		regexp.MustCompile(`(?s)<!-- autoskills:begin id=([^ >]+)(?: group=([a-z]+))?(?: conf=([0-9.]+))? -->\n?(.*?)\n?<!-- autoskills:end id=[^ >]+ -->\n?`),
+	}
+	sectionRes = []*regexp.Regexp{
+		regexp.MustCompile(`(?s)\n?` + regexp.QuoteMeta(sectionBegin) + `.*?` + regexp.QuoteMeta(sectionEnd) + `\n?`),
+		regexp.MustCompile(`(?s)\n?<!-- autoskills:section:begin -->.*?<!-- autoskills:section:end -->\n?`),
+	}
 )
 
 // SectionBudgetBytes caps the managed AGENTS.md section. Context is a finite resource — an
@@ -132,19 +138,21 @@ type Block struct {
 	Body       string // includes the "#### Title" heading line
 }
 
-// ParseBlocks extracts every autoskills-managed block from AGENTS.md content (used by the
+// ParseBlocks extracts every temper-managed block from AGENTS.md content (used by the
 // gardener and `verify`).
 func ParseBlocks(content string) []Block {
 	var out []Block
-	for _, m := range blockRe.FindAllStringSubmatch(content, -1) {
-		b := Block{ID: m[1], Group: m[2], Body: strings.TrimSpace(m[4])}
-		if !knownGroup(b.Group) {
-			b.Group = "conventions" // unknown/missing groups must never be silently dropped on rebuild
+	for _, blockRe := range blockRes {
+		for _, m := range blockRe.FindAllStringSubmatch(content, -1) {
+			b := Block{ID: m[1], Group: m[2], Body: strings.TrimSpace(m[4])}
+			if !knownGroup(b.Group) {
+				b.Group = "conventions" // unknown/missing groups must never be silently dropped on rebuild
+			}
+			if c, err := strconv.ParseFloat(m[3], 64); err == nil {
+				b.Confidence = c
+			}
+			out = append(out, b)
 		}
-		if c, err := strconv.ParseFloat(m[3], 64); err == nil {
-			b.Confidence = c
-		}
-		out = append(out, b)
 	}
 	return out
 }
@@ -269,8 +277,12 @@ func planAgentsBlock(g store.Suggestion, plan Plan) (Mutation, error) {
 	}
 
 	// strip the old section and any legacy blocks, then rebuild from scratch
-	content = sectionRe.ReplaceAllString(content, "\n")
-	content = blockRe.ReplaceAllString(content, "")
+	for _, sectionRe := range sectionRes {
+		content = sectionRe.ReplaceAllString(content, "\n")
+	}
+	for _, blockRe := range blockRes {
+		content = blockRe.ReplaceAllString(content, "")
+	}
 	content = strings.TrimRight(content, "\n")
 	if content == "" {
 		content = "# AGENTS.md\n"
@@ -291,8 +303,8 @@ func planAgentsBlock(g store.Suggestion, plan Plan) (Mutation, error) {
 func renderSection(blocks map[string]Block, order []string) string {
 	var sb strings.Builder
 	sb.WriteString(sectionBegin + "\n")
-	sb.WriteString("## Agent skills (autoskills)\n\n")
-	sb.WriteString("Skills distilled from agent sessions and accepted in review. Managed by autoskills — update via `autoskills review`, not by hand.\n")
+	sb.WriteString("## Agent skills (temper)\n\n")
+	sb.WriteString("Skills distilled from agent sessions and accepted in review. Managed by temper — update via `temper review`, not by hand.\n")
 	for _, grp := range groupOrder {
 		var members []Block
 		for _, id := range order {
@@ -305,7 +317,7 @@ func renderSection(blocks map[string]Block, order []string) string {
 		}
 		sb.WriteString("\n### " + grp.heading + "\n")
 		for _, b := range members {
-			fmt.Fprintf(&sb, "\n<!-- autoskills:begin id=%s group=%s conf=%.2f -->\n%s\n<!-- autoskills:end id=%s -->\n", b.ID, b.Group, b.Confidence, b.Body, b.ID)
+			fmt.Fprintf(&sb, "\n<!-- temper:begin id=%s group=%s conf=%.2f -->\n%s\n<!-- temper:end id=%s -->\n", b.ID, b.Group, b.Confidence, b.Body, b.ID)
 		}
 	}
 	sb.WriteString(sectionEnd + "\n")
@@ -337,13 +349,13 @@ func demotionOp(repoRoot string, b Block) (FileOp, string, error) {
 	if title == "" {
 		title = b.ID
 	}
-	dir := filepath.Join(repoRoot, ".cursor", "skills", "autoskills-"+slug(title))
+	dir := filepath.Join(repoRoot, ".cursor", "skills", "temper-"+slug(title))
 	path := filepath.Join(dir, "SKILL.md")
 	if err := confine(repoRoot, path); err != nil {
 		return FileOp{}, "", err
 	}
 	body := strings.TrimSpace(strings.TrimPrefix(b.Body, "#### "+title))
-	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n\n<!-- autoskills:demoted id=%s reason=section-budget -->\n", slug(title), yamlEscape(title), body, b.ID)
+	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s\n\n<!-- temper:demoted id=%s reason=section-budget -->\n", slug(title), yamlEscape(title), body, b.ID)
 	return FileOp{Root: repoRoot, Path: path, Content: content},
 		fmt.Sprintf("  budget: demoted %q to %s\n", title, path), nil
 }
@@ -395,21 +407,53 @@ func BuildRemoval(g store.Suggestion) (Mutation, error) {
 		}
 		return planAgentsBlock(gg, prunePlan)
 	}
-	if filepath.Clean(g.WrittenPath) != filepath.Clean(plan.Path) {
+	storedPath := filepath.Clean(g.WrittenPath)
+	targetPath := filepath.Clean(plan.Path)
+	legacyPath := legacyArtifactPath(plan)
+	switch storedPath {
+	case targetPath:
+	case legacyPath:
+		targetPath = legacyPath
+		// The home migration moves machine skills with the directory while the historical database
+		// row still names ~/.autoskills. Prefer the migrated location when it exists.
+		if plan.Kind == KindMachineSkill {
+			if _, err := os.Lstat(plan.Path); err == nil {
+				targetPath = plan.Path
+			}
+		}
+	default:
 		return Mutation{}, fmt.Errorf("writer: refusing to remove %q: this suggestion's artifact is %q", clip(g.WrittenPath), clip(plan.Path))
 	}
-	mut := Mutation{Ops: []FileOp{{Root: plan.Root, Path: plan.Path, Remove: true}}}
-	dir := filepath.Dir(plan.Path)
+	if err := confine(plan.Root, targetPath); err != nil {
+		return Mutation{}, err
+	}
+	mut := Mutation{Ops: []FileOp{{Root: plan.Root, Path: targetPath, Remove: true}}}
+	dir := filepath.Dir(targetPath)
 	// older versions emitted an executable run.sh next to a skill (removed in HOK-539); undo must
-	// still clean one up when it exists, but only inside directories we own (autoskills- prefix)
-	if strings.HasPrefix(filepath.Base(dir), "autoskills-") {
+	// still clean one up when it exists, but only inside directories we own (temper- prefix)
+	if strings.HasPrefix(filepath.Base(dir), "temper-") || strings.HasPrefix(filepath.Base(dir), "autoskills-") {
 		mut.Ops = append(mut.Ops, FileOp{Root: plan.Root, Path: filepath.Join(dir, "run.sh"), Remove: true})
 	}
-	// the now-empty `autoskills-<slug>` directory is left where it is. Removing a directory needs
+	// the now-empty `temper-<slug>` directory is left where it is. Removing a directory needs
 	// proof that this operation created it and that nothing else has since been put inside, and a
 	// manifest written before the mutation cannot carry the second half across a crash. An empty
 	// directory is untidy; deleting one the user had put something in is not recoverable.
 	return mut, nil
+}
+
+func legacyArtifactPath(plan Plan) string {
+	switch plan.Kind {
+	case KindMachineSkill:
+		return filepath.Join(filepath.Dir(filepath.Dir(plan.Root)), ".autoskills", "skills", filepath.Base(plan.Path))
+	case KindCursorRule:
+		return filepath.Join(filepath.Dir(plan.Path), strings.Replace(filepath.Base(plan.Path), "temper-", "autoskills-", 1))
+	case KindRepoSkill:
+		dir := filepath.Dir(plan.Path)
+		legacyDir := filepath.Join(filepath.Dir(dir), strings.Replace(filepath.Base(dir), "temper-", "autoskills-", 1))
+		return filepath.Join(legacyDir, filepath.Base(plan.Path))
+	default:
+		return plan.Path
+	}
 }
 
 // claudeImportOp makes an existing CLAUDE.md pick up AGENTS.md content via the official @import

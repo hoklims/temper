@@ -20,9 +20,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/elcruzo/autoskills/internal/store"
-	"github.com/elcruzo/autoskills/internal/writer"
-	"github.com/elcruzo/autoskills/web"
+	"github.com/hoklims/temper/internal/store"
+	"github.com/hoklims/temper/internal/writer"
+	"github.com/hoklims/temper/web"
 )
 
 const DefaultAddr = "127.0.0.1:4517"
@@ -30,7 +30,11 @@ const DefaultAddr = "127.0.0.1:4517"
 // CapabilityHeader carries the process-scoped capability that authorizes a mutation. A custom
 // header is deliberate: a browser cannot send one cross-origin without a preflight, and no CORS
 // response header is ever emitted, so the preflight fails before the request is made.
-const CapabilityHeader = "X-AutoSkills-Capability"
+const CapabilityHeader = "X-Temper-Capability"
+
+// LegacyCapabilityHeader keeps already-open AutoSkills dashboards working during an in-place
+// upgrade. New clients receive and send CapabilityHeader.
+const LegacyCapabilityHeader = "X-AutoSkills-Capability"
 
 // maxDecisionBodyBytes bounds a decision request before it is decoded. An edited skill body is
 // review-sized text, not an upload.
@@ -172,6 +176,9 @@ func (s *Server) authorized(r *http.Request) bool {
 		return false
 	}
 	presented := r.Header.Get(CapabilityHeader)
+	if presented == "" {
+		presented = r.Header.Get(LegacyCapabilityHeader)
+	}
 	return subtle.ConstantTimeCompare([]byte(presented), []byte(s.capability)) == 1
 }
 
@@ -354,7 +361,7 @@ func uiHandler() http.Handler {
 func placeholderHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		fmt.Fprintln(w, "autoskills: dashboard assets not built. run `bun run build` in web/ and rebuild the binary.")
+		fmt.Fprintln(w, "temper: dashboard assets not built. run `bun run build` in web/ and rebuild the binary.")
 	})
 }
 

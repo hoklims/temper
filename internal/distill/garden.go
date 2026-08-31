@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/outbound"
-	"github.com/elcruzo/autoskills/internal/store"
-	"github.com/elcruzo/autoskills/internal/writer"
+	"github.com/hoklims/temper/internal/outbound"
+	"github.com/hoklims/temper/internal/store"
+	"github.com/hoklims/temper/internal/writer"
 )
 
-const gardenSystemPrompt = `You are the gardener inside AutoSkills. Your job is the OPPOSITE of adding: you keep an agent-context file healthy by tightening, merging, and removing skills. A bloated or stale skill section makes coding agents WORSE ("Markdown poisoning") — every byte must earn its place.
+const gardenSystemPrompt = `You are the gardener inside Temper. Your job is the OPPOSITE of adding: you keep an agent-context file healthy by tightening, merging, and removing skills. A bloated or stale skill section makes coding agents WORSE ("Markdown poisoning") — every byte must earn its place.
 
 You receive the managed skill blocks from a repo's AGENTS.md. Propose actions:
 - "amend": rewrite a block tighter (merge overlapping blocks into the strongest one by amending it to cover both; shorten verbose bodies; replace prose with commands/tables). Provide the FULL replacement title and body.
@@ -108,7 +108,7 @@ func (d *Distiller) Garden(ctx context.Context, repoRoot, project string) ([]sto
 		b, known := byID[a.BlockID]
 		// closed schema before anything reaches the inbox
 		if err := a.validate(); err != nil {
-			if os.Getenv("AUTOSKILLS_DEBUG") != "" {
+			if os.Getenv("TEMPER_DEBUG") != "" {
 				fmt.Fprintf(os.Stderr, "  drop garden action on %s: %v\n", truncateForLog(a.BlockID), err)
 			}
 			continue
@@ -147,7 +147,7 @@ func (d *Distiller) Garden(ctx context.Context, repoRoot, project string) ([]sto
 		}
 		plan, err := writer.BuildPlan(g)
 		if err != nil {
-			if os.Getenv("AUTOSKILLS_DEBUG") != "" {
+			if os.Getenv("TEMPER_DEBUG") != "" {
 				fmt.Fprintf(os.Stderr, "  drop garden action on %s: %v\n", truncateForLog(a.BlockID), err)
 			}
 			continue

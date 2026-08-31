@@ -1,4 +1,4 @@
-// Package config loads ~/.autoskills/config.json with environment-variable overrides.
+// Package config loads ~/.temper/config.json with legacy AutoSkills compatibility.
 package config
 
 import (
@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/hoklims/temper/internal/migrate"
 )
 
 type Config struct {
@@ -28,7 +30,7 @@ type Config struct {
 	IgnoreProjects []string `json:"ignore_projects"`
 	// TriggerPhrase tunes automation down from "everything" to "on demand": when set, only
 	// sessions where the USER typed this phrase (case-insensitive) are distilled —
-	// e.g. "autoskills this". Empty means distill every eligible session.
+	// e.g. "temper this". Empty means distill every eligible session.
 	TriggerPhrase string `json:"trigger_phrase"`
 	// AutoAcceptThreshold is DEPRECATED and never acted upon (HOK-539). It used to write
 	// high-confidence suggestions to disk at scan time, which let model-authored content become a
@@ -39,17 +41,13 @@ type Config struct {
 	// context is a finite resource). On overflow the lowest-confidence skills are demoted to
 	// on-demand skill files. Default 12000 (~3k tokens). Codex hard-caps AGENTS.md at 32KiB.
 	SectionBudgetBytes int `json:"section_budget_bytes"`
-	// DaemonIntervalMinutes is the periodic sweep interval for `autoskills daemon` (file
+	// DaemonIntervalMinutes is the periodic sweep interval for `temper daemon` (file
 	// watching triggers scans sooner; this is the safety net). Default 30.
 	DaemonIntervalMinutes int `json:"daemon_interval_minutes"`
 }
 
 func Dir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".autoskills"
-	}
-	return filepath.Join(home, ".autoskills")
+	return migrate.CurrentDir()
 }
 
 func Path() string { return filepath.Join(Dir(), "config.json") }
@@ -133,7 +131,8 @@ func providerField(raw []byte) (json.RawMessage, bool, error) {
 }
 
 // Load reads the config file if present, then applies env overrides:
-// AUTOSKILLS_PROVIDER, AUTOSKILLS_ENDPOINT, AUTOSKILLS_API_KEY, AUTOSKILLS_MODEL.
+// TEMPER_PROVIDER, TEMPER_ENDPOINT, TEMPER_API_KEY, TEMPER_MODEL. Legacy AUTOSKILLS_* names remain
+// accepted when the corresponding TEMPER_* variable is absent.
 // Falls back to ANTHROPIC_API_KEY / OPENAI_API_KEY when no key is configured
 // (matching the endpoint's provider when recognizable).
 func Load() (Config, error) {
@@ -173,31 +172,31 @@ func Load() (Config, error) {
 	}
 
 	fileProvider := cfg.Provider
-	if value, present := os.LookupEnv("AUTOSKILLS_PROVIDER"); present {
+	if value, present := environment("TEMPER_PROVIDER", "AUTOSKILLS_PROVIDER"); present {
 		cfg.Provider, err = parseProvider(value)
 		if err != nil {
 			return cfg, err
 		}
-		if cfg.Provider != fileProvider && os.Getenv("AUTOSKILLS_MODEL") == "" {
+		if cfg.Provider != fileProvider && environmentValue("TEMPER_MODEL", "AUTOSKILLS_MODEL") == "" {
 			cfg.Model = ""
 			modelConfigured = false
 		}
 	}
-	if cfg.Provider != "http" && !modelConfigured && os.Getenv("AUTOSKILLS_MODEL") == "" {
+	if cfg.Provider != "http" && !modelConfigured && environmentValue("TEMPER_MODEL", "AUTOSKILLS_MODEL") == "" {
 		cfg.Model = ""
 	}
-	if v := os.Getenv("AUTOSKILLS_ENDPOINT"); v != "" {
+	if v := environmentValue("TEMPER_ENDPOINT", "AUTOSKILLS_ENDPOINT"); v != "" {
 		cfg.Endpoint = v
 	}
-	if v := os.Getenv("AUTOSKILLS_MODEL"); v != "" {
+	if v := environmentValue("TEMPER_MODEL", "AUTOSKILLS_MODEL"); v != "" {
 		cfg.Model = v
 	}
-	if v := os.Getenv("AUTOSKILLS_API_KEY"); v != "" {
+	if v := environmentValue("TEMPER_API_KEY", "AUTOSKILLS_API_KEY"); v != "" {
 		cfg.APIKey = v
 	}
 	if cfg.Provider == "http" && cfg.APIKey == "" {
 		// Only official HTTPS endpoints may inherit provider credentials. Custom gateways
-		// must use api_key or AUTOSKILLS_API_KEY explicitly.
+		// must use api_key or TEMPER_API_KEY explicitly.
 		switch officialHTTPProvider(cfg.Endpoint) {
 		case "anthropic":
 			if v := os.Getenv("ANTHROPIC_API_KEY"); v != "" {
@@ -219,4 +218,16 @@ func Load() (Config, error) {
 		cfg.DaemonIntervalMinutes = 30
 	}
 	return cfg, nil
+}
+
+func environment(current, legacy string) (string, bool) {
+	if value, present := os.LookupEnv(current); present {
+		return value, true
+	}
+	return os.LookupEnv(legacy)
+}
+
+func environmentValue(current, legacy string) string {
+	value, _ := environment(current, legacy)
+	return value
 }

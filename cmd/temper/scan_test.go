@@ -13,10 +13,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/config"
-	"github.com/elcruzo/autoskills/internal/llm"
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/config"
+	"github.com/hoklims/temper/internal/llm"
+	"github.com/hoklims/temper/internal/store"
 )
+
+func TestCommandUsesStateExcludesServiceManagement(t *testing.T) {
+	for _, command := range []string{"scan", "review", "status", "daemon", "garden", "verify", "undo"} {
+		if !commandUsesState(command) {
+			t.Fatalf("%s should migrate state before running", command)
+		}
+	}
+	for _, command := range []string{"install-daemon", "version", "help"} {
+		if commandUsesState(command) {
+			t.Fatalf("%s should remain usable when state migration is blocked", command)
+		}
+	}
+}
 
 func TestConfiguredProviderSelection(t *testing.T) {
 	if _, err := configuredProvider(config.Config{Provider: "http", Endpoint: "http://localhost:11434/v1"}); err != nil {
@@ -34,8 +47,8 @@ func TestConfiguredProviderSelection(t *testing.T) {
 }
 
 func TestCodexScanSmoke(t *testing.T) {
-	if os.Getenv("AUTOSKILLS_CODEX_SCAN_SMOKE") == "" {
-		t.Skip("set AUTOSKILLS_CODEX_SCAN_SMOKE=1 to run a scan with the authenticated Codex CLI")
+	if os.Getenv("TEMPER_CODEX_SCAN_SMOKE") == "" {
+		t.Skip("set TEMPER_CODEX_SCAN_SMOKE=1 to run a scan with the authenticated Codex CLI")
 	}
 	codexHome := os.Getenv("CODEX_HOME")
 	if codexHome == "" {
@@ -184,7 +197,7 @@ func TestScanNeverWritesEvenWithLegacyAutoAcceptThreshold(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repo, "AGENTS.md")); !os.IsNotExist(err) {
 		t.Fatalf("scan wrote AGENTS.md (err=%v)", err)
 	}
-	if entries, err := os.ReadDir(filepath.Join(home, ".autoskills", "skills")); err == nil && len(entries) > 0 {
+	if entries, err := os.ReadDir(filepath.Join(home, ".temper", "skills")); err == nil && len(entries) > 0 {
 		t.Fatalf("scan wrote machine skills: %v", entries)
 	}
 	if entries, err := os.ReadDir(repo); err != nil || len(entries) != 0 {

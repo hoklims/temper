@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/elcruzo/autoskills/internal/outbound"
+	"github.com/hoklims/temper/internal/outbound"
 )
 
 var (
@@ -289,11 +289,11 @@ func providerEnvironmentVariableBlocked(kind, name string) bool {
 	if kind == "claude" && name == "CLAUDE_CONFIG_DIR" {
 		return false
 	}
-	// AutoSkills' own configuration is parent-only. AUTOSKILLS_API_KEY is a provider credential for
+	// Temper's own configuration is parent-only. TEMPER_API_KEY is a provider credential for
 	// the HTTP path and has no business in a CLI child; the rest (provider, endpoint, model) would
 	// let a subprocess read — or be steered by — this process's configuration. The whole prefix is
 	// removed rather than a list of known names, because a name added later would leak silently.
-	if strings.HasPrefix(name, "AUTOSKILLS_") {
+	if strings.HasPrefix(name, "TEMPER_") || strings.HasPrefix(name, "AUTOSKILLS_") {
 		return true
 	}
 	if name == "RUST_LOG" || name == "RUST_BACKTRACE" || strings.HasPrefix(name, "OTEL_") || strings.HasPrefix(name, "CODEX_") || strings.HasPrefix(name, "OPENAI_") || strings.HasPrefix(name, "CLAUDE_") || strings.HasPrefix(name, "ANTHROPIC_") {
@@ -369,7 +369,7 @@ func neutralWorkingDirectory(excludedRoots []string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("llm: resolve caller working directory: %w", err)
 	}
-	createdDir, err := os.MkdirTemp("", "autoskills-llm-")
+	createdDir, err := os.MkdirTemp("", "temper-llm-")
 	if err != nil {
 		return "", fmt.Errorf("llm: create neutral working directory: %w", err)
 	}

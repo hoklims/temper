@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // This file holds the oracles for the authority a mutation acts under: which directory it is
@@ -46,7 +46,7 @@ func TestAuthorizedRootCannotBeSwappedAfterCapture(t *testing.T) {
 	}
 
 	mut := Mutation{
-		Ops:         []FileOp{{Root: repo, Path: insidePath, Content: "autoskills replacement\n"}},
+		Ops:         []FileOp{{Root: repo, Path: insidePath, Content: "temper replacement\n"}},
 		WrittenPath: insidePath,
 	}
 	if err := capture(&mut); err != nil {
@@ -108,7 +108,7 @@ func TestSamePathRootObjectReplacementIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mut := Mutation{Ops: []FileOp{{Root: root, Path: target, Content: "autoskills wrote here\n"}}, WrittenPath: target}
+	mut := Mutation{Ops: []FileOp{{Root: root, Path: target, Content: "temper wrote here\n"}}, WrittenPath: target}
 	if err := capture(&mut); err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestEditAfterTheLastWriteIsNotCommittedOver(t *testing.T) {
 	agents := filepath.Join(repo, "AGENTS.md")
 	claude := filepath.Join(repo, "CLAUDE.md")
 	claudeBefore := read(t, claude)
-	edit := "# AGENTS.md\n\nedited after autoskills wrote its last file\n"
+	edit := "# AGENTS.md\n\nedited after temper wrote its last file\n"
 
 	// the edit has to land after the LAST write, so the test asserts which operation that is
 	// instead of assuming it
@@ -427,7 +427,7 @@ func TestRollbackRestoresFilesAndRemovesNoDirectory(t *testing.T) {
 	}
 
 	g := suggestion(repo)
-	g.Placement = "skill" // <repo>/.cursor/skills/autoskills-<slug>/SKILL.md
+	g.Placement = "skill" // <repo>/.cursor/skills/temper-<slug>/SKILL.md
 	mut, err := BuildMutation(g)
 	if err != nil {
 		t.Fatal(err)

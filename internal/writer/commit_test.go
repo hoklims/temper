@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // The last ordering point of the saga: the files are on disk and proved, and the journal
@@ -231,7 +231,7 @@ func (e *editingJournal) CommitOperation(id string) error {
 //
 // The last whole-manifest validation is the commit of the filesystem half: every destination was
 // proved to hold exactly what this mutation wrote. A change landing AFTER that is somebody editing
-// a file autoskills had finished writing, and the journal transaction that follows does not hold
+// a file temper had finished writing, and the journal transaction that follows does not hold
 // the user's disk still. This package does not claim otherwise — the decision is recorded, because
 // it was true when it was made.
 //
@@ -240,7 +240,7 @@ func (e *editingJournal) CommitOperation(id string) error {
 func TestAnEditAfterTheFilesystemCommitIsAPostCommitChange(t *testing.T) {
 	st, repo, g := journalRepo(t)
 	agents := filepath.Join(repo, "AGENTS.md")
-	edit := "# AGENTS.md\n\nedited after autoskills had finished writing every file\n"
+	edit := "# AGENTS.md\n\nedited after temper had finished writing every file\n"
 	mut, opID := beginAccept(t, st, g)
 
 	j := &editingJournal{Store: st, edit: func() {

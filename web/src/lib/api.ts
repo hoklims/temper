@@ -48,7 +48,7 @@ export interface DecisionResponse {
   writtenPath?: string
 }
 
-const CAPABILITY_HEADER = 'X-AutoSkills-Capability'
+const CAPABILITY_HEADER = 'X-Temper-Capability'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
@@ -58,7 +58,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-// The capability authorizes a decision. It belongs to the running autoskills process, so it is
+// The capability authorizes a decision. It belongs to the running temper process, so it is
 // fetched from it and kept in memory only — persisting it would outlive the process that issued it.
 let capability: Promise<string> | null = null
 

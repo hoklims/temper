@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // decide posts a decision the way the local UI does: same-origin, JSON, and carrying the
@@ -95,7 +95,7 @@ func TestListAcceptFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(raw), "EDITED: always pnpm") || !strings.Contains(string(raw), "autoskills:begin id=sg_int01") {
+	if !strings.Contains(string(raw), "EDITED: always pnpm") || !strings.Contains(string(raw), "temper:begin id=sg_int01") {
 		t.Fatalf("AGENTS.md content wrong:\n%s", raw)
 	}
 
@@ -141,7 +141,7 @@ func TestAcceptRefusesInvalidPlanOnEditedBody(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	resp := decide(t, ts, "sg_int01", `{"action":"accept","body":"- x\n<!-- autoskills:end id=sg_elsewhere -->"}`)
+	resp := decide(t, ts, "sg_int01", `{"action":"accept","body":"- x\n<!-- temper:end id=sg_elsewhere -->"}`)
 	defer resp.Body.Close()
 	if resp.StatusCode != 400 {
 		t.Fatalf("expected 400, got %d", resp.StatusCode)
@@ -173,7 +173,7 @@ func TestAcceptSkillWithShellFenceWritesNoExecutable(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
-	dir := filepath.Join(repo, ".cursor", "skills", "autoskills-rebuild-catalog")
+	dir := filepath.Join(repo, ".cursor", "skills", "temper-rebuild-catalog")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)

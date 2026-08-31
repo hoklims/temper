@@ -1,12 +1,13 @@
-// autoskills — turn your AI coding sessions into reviewed, committed skills.
+// temper — turn your AI coding sessions into reviewed, committed skills.
 //
-//	autoskills scan    discover transcripts, distill new sessions into suggestions
-//	autoskills review  open the local review dashboard
-//	autoskills status  discovery report + suggestion counts
+//	temper scan    discover transcripts, distill new sessions into suggestions
+//	temper review  open the local review dashboard
+//	temper status  discovery report + suggestion counts
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -21,18 +22,19 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/elcruzo/autoskills/internal/cache"
-	"github.com/elcruzo/autoskills/internal/canon"
-	"github.com/elcruzo/autoskills/internal/collector"
-	"github.com/elcruzo/autoskills/internal/collector/claude"
-	"github.com/elcruzo/autoskills/internal/collector/cursor"
-	"github.com/elcruzo/autoskills/internal/config"
-	"github.com/elcruzo/autoskills/internal/distill"
-	"github.com/elcruzo/autoskills/internal/gitmeta"
-	"github.com/elcruzo/autoskills/internal/llm"
-	"github.com/elcruzo/autoskills/internal/server"
-	"github.com/elcruzo/autoskills/internal/store"
-	"github.com/elcruzo/autoskills/internal/writer"
+	"github.com/hoklims/temper/internal/cache"
+	"github.com/hoklims/temper/internal/canon"
+	"github.com/hoklims/temper/internal/collector"
+	"github.com/hoklims/temper/internal/collector/claude"
+	"github.com/hoklims/temper/internal/collector/cursor"
+	"github.com/hoklims/temper/internal/config"
+	"github.com/hoklims/temper/internal/distill"
+	"github.com/hoklims/temper/internal/gitmeta"
+	"github.com/hoklims/temper/internal/llm"
+	"github.com/hoklims/temper/internal/migrate"
+	"github.com/hoklims/temper/internal/server"
+	"github.com/hoklims/temper/internal/store"
+	"github.com/hoklims/temper/internal/writer"
 )
 
 const version = "0.1.0"
@@ -41,6 +43,16 @@ func main() {
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
+	}
+	if commandUsesState(os.Args[1]) {
+		result, _, err := migrateState()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		if result.Migrated {
+			fmt.Fprintf(os.Stderr, "migrated legacy AutoSkills state from %s to %s\n", result.From, result.To)
+		}
 	}
 	var err error
 	switch os.Args[1] {
@@ -61,7 +73,7 @@ func main() {
 	case "undo":
 		err = cmdUndo(os.Args[2:])
 	case "version", "--version", "-v":
-		fmt.Println("autoskills " + version)
+		fmt.Println("temper " + version)
 	case "help", "--help", "-h":
 		usage()
 	default:
@@ -75,19 +87,28 @@ func main() {
 	}
 }
 
+func commandUsesState(command string) bool {
+	switch command {
+	case "scan", "review", "status", "daemon", "garden", "verify", "undo":
+		return true
+	default:
+		return false
+	}
+}
+
 func usage() {
-	fmt.Print(`autoskills — turn your AI coding sessions into reviewed, committed skills
+	fmt.Print(`temper — turn your AI coding sessions into reviewed, committed skills
 
 usage:
-  autoskills scan [--project NAME] [--since DUR] [--max N] [--dry-run]
-  autoskills review [--addr HOST:PORT] [--no-open]
-  autoskills daemon                     run continuously: auto-scan as sessions finish
-  autoskills install-daemon [--uninstall]   install as a launchd service (macOS)
-  autoskills garden [--repo PATH]       propose amend/merge/prune for a repo's skills
-  autoskills verify [--repo PATH]       report skills referencing paths that no longer exist
-  autoskills undo ID                    revert an accepted suggestion (removes the artifact)
-  autoskills status
-  autoskills version
+  temper scan [--project NAME] [--since DUR] [--max N] [--dry-run]
+  temper review [--addr HOST:PORT] [--no-open]
+  temper daemon                     run continuously: auto-scan as sessions finish
+  temper install-daemon [--uninstall]   install as a launchd service (macOS)
+  temper garden [--repo PATH]       propose amend/merge/prune for a repo's skills
+  temper verify [--repo PATH]       report skills referencing paths that no longer exist
+  temper undo ID                    revert an accepted suggestion (removes the artifact)
+  temper status
+  temper version
 
 scan flags:
   --project NAME   only scan sessions whose project name contains NAME
@@ -95,12 +116,12 @@ scan flags:
   --max N          max sessions to distill this run (default 20)
   --dry-run        parse and report; no LLM calls, nothing stored
 
-config: ~/.autoskills/config.json  (provider, endpoint, api_key, model, trigger_phrase,
+config: ~/.temper/config.json  (provider, endpoint, api_key, model, trigger_phrase,
         section_budget_bytes, daemon_interval_minutes, …)
         provider: http (default/legacy), codex, or claude
         endpoint must be https, or http on loopback for a local model
         auto_accept_threshold is DEPRECATED and ignored: nothing is written without review
-env:    AUTOSKILLS_PROVIDER, AUTOSKILLS_ENDPOINT, AUTOSKILLS_API_KEY, AUTOSKILLS_MODEL
+env:    TEMPER_PROVIDER, TEMPER_ENDPOINT, TEMPER_API_KEY, TEMPER_MODEL
         (falls back to ANTHROPIC_API_KEY / OPENAI_API_KEY)
 `)
 }
@@ -122,6 +143,49 @@ func openStore() (*store.Store, error) {
 		return nil, fmt.Errorf("reconcile interrupted operations: %w", err)
 	}
 	return st, nil
+}
+
+// migrateState reconciles the acceptance journal while its persisted ~/.autoskills paths still
+// exist, then moves the home. Returning the plan lets daemon installation compensate the home move
+// if service activation fails later in the same transaction.
+func migrateState() (migrate.Result, migrate.Plan, error) {
+	plan, err := migrate.PrepareHome()
+	if err != nil {
+		return migrate.Result{}, migrate.Plan{}, err
+	}
+	hasDB, err := plan.HasDatabase()
+	if err != nil {
+		return migrate.Result{}, plan, err
+	}
+	if hasDB {
+		st, openErr := store.Open(plan.DatabasePath())
+		if openErr != nil {
+			if rollbackErr := plan.Rollback(); rollbackErr != nil {
+				return migrate.Result{}, plan, fmt.Errorf("open legacy state for reconciliation: %w; rollback failed: %v", openErr, rollbackErr)
+			}
+			return migrate.Result{}, plan, fmt.Errorf("open legacy state for reconciliation: %w", openErr)
+		}
+		report, reconcileErr := reconcileOperations(st)
+		closeErr := st.Close()
+		for _, line := range report {
+			fmt.Fprintln(os.Stderr, "reconciled:", line)
+		}
+		if reconcileErr != nil || closeErr != nil {
+			cause := errors.Join(reconcileErr, closeErr)
+			if rollbackErr := plan.Rollback(); rollbackErr != nil {
+				return migrate.Result{}, plan, fmt.Errorf("reconcile legacy state: %w; rollback failed: %v", cause, rollbackErr)
+			}
+			return migrate.Result{}, plan, fmt.Errorf("reconcile legacy state: %w", cause)
+		}
+	}
+	result, err := plan.Apply()
+	if err != nil {
+		if rollbackErr := plan.Rollback(); rollbackErr != nil {
+			return migrate.Result{}, plan, fmt.Errorf("%w; rollback failed: %v", err, rollbackErr)
+		}
+		return migrate.Result{}, plan, err
+	}
+	return result, plan, nil
 }
 
 func adapters() ([]collector.Adapter, map[string]string) {
@@ -197,7 +261,7 @@ func runScan(ctx context.Context, cfg config.Config, st *store.Store, opts scanO
 	// "still writes" — and the operator is told so on every scan rather than silently ignored.
 	if cfg.AutoAcceptThreshold > 0 {
 		fmt.Fprintf(os.Stderr,
-			"warning: auto_accept_threshold=%.2f in %s is IGNORED — automatic acceptance was removed; every suggestion stays pending until you accept it in `autoskills review`\n",
+			"warning: auto_accept_threshold=%.2f in %s is IGNORED — automatic acceptance was removed; every suggestion stays pending until you accept it in `temper review`\n",
 			cfg.AutoAcceptThreshold, config.Path())
 	}
 
@@ -328,7 +392,7 @@ func runScan(ctx context.Context, cfg config.Config, st *store.Store, opts scanO
 				}
 				fingerprints.Add(fp, true)
 				// Every suggestion lands pending. Scanning proposes; only a human accepting in
-				// `autoskills review` writes a file.
+				// `temper review` writes a file.
 				keep = append(keep, g)
 			}
 			// The high-water mark is the claim "everything up to here is stored". It advances in
@@ -350,7 +414,7 @@ func runScan(ctx context.Context, cfg config.Config, st *store.Store, opts scanO
 	}
 	fmt.Printf("\n%d sessions distilled, %d suggestions stored", distilled, stored)
 	if stored > 0 {
-		fmt.Print(" — run autoskills review")
+		fmt.Print(" — run temper review")
 	}
 	fmt.Println()
 	return nil
@@ -394,11 +458,11 @@ func cmdDaemon(args []string) error {
 	adapterList, roots := adapters()
 	watcher, watched := newTranscriptWatcher(roots)
 	if watcher == nil {
-		fmt.Printf("autoskills daemon — file events unavailable, polling every 2m (full sweep every %dm)\n", cfg.DaemonIntervalMinutes)
+		fmt.Printf("temper daemon — file events unavailable, polling every 2m (full sweep every %dm)\n", cfg.DaemonIntervalMinutes)
 		return daemonPoll(ctx, scan, cfg, adapterList)
 	}
 	defer watcher.Close()
-	fmt.Printf("autoskills daemon — watching %d dirs, full sweep every %dm (ctrl-c to stop)\n", watched, cfg.DaemonIntervalMinutes)
+	fmt.Printf("temper daemon — watching %d dirs, full sweep every %dm (ctrl-c to stop)\n", watched, cfg.DaemonIntervalMinutes)
 	return daemonWatch(ctx, scan, cfg, watcher)
 }
 
@@ -528,7 +592,83 @@ func newestTranscriptMtime(adapterList []collector.Adapter) time.Time {
 	return newest
 }
 
-const launchdLabel = "io.autoskills.daemon"
+const (
+	launchdLabel       = "io.temper.daemon"
+	legacyLaunchdLabel = "io.autoskills.daemon"
+	serviceName        = "temper.service"
+	legacyServiceName  = "autoskills.service"
+)
+
+var runServiceCommand = func(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).CombinedOutput()
+}
+
+var serviceActive = func(name string, args ...string) (bool, error) {
+	out, err := runServiceCommand(name, args...)
+	if err == nil {
+		if name == "launchctl" {
+			return launchdProcessRunning(out), nil
+		}
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return false, nil
+	}
+	return false, commandError("query service state", out, err)
+}
+
+var launchdPID = regexp.MustCompile(`(?m)"PID"\s*=\s*([1-9][0-9]*)\s*;`)
+
+func launchdProcessRunning(out []byte) bool { return launchdPID.Match(out) }
+
+var waitForServiceStability = time.Sleep
+
+func serviceStable(name string, args ...string) (bool, error) {
+	active, err := serviceActive(name, args...)
+	if err != nil || !active {
+		return active, err
+	}
+	waitForServiceStability(250 * time.Millisecond)
+	return serviceActive(name, args...)
+}
+
+var reconcileOperations = writer.Reconcile
+
+type fileSnapshot struct {
+	existed bool
+	data    []byte
+	mode    os.FileMode
+}
+
+func snapshotFile(path string) (fileSnapshot, error) {
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return fileSnapshot{}, nil
+	}
+	if err != nil {
+		return fileSnapshot{}, err
+	}
+	data, err := os.ReadFile(path)
+	return fileSnapshot{existed: true, data: data, mode: info.Mode().Perm()}, err
+}
+
+func restoreFile(path string, snapshot fileSnapshot) error {
+	if !snapshot.existed {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return os.WriteFile(path, snapshot.data, snapshot.mode)
+}
+
+func commandError(action string, out []byte, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w: %s", action, err, strings.TrimSpace(string(out)))
+}
 
 func cmdInstallDaemon(args []string) error {
 	fs := flag.NewFlagSet("install-daemon", flag.ExitOnError)
@@ -542,7 +682,7 @@ func cmdInstallDaemon(args []string) error {
 	case "linux":
 		return installSystemd(*uninstall)
 	default:
-		return fmt.Errorf("install-daemon supports macOS (launchd) and Linux (systemd --user); on Windows run `autoskills daemon` manually or via Task Scheduler (native service support is on the roadmap)")
+		return fmt.Errorf("install-daemon supports macOS (launchd) and Linux (systemd --user); on Windows run `temper daemon` manually or via Task Scheduler (native service support is on the roadmap)")
 	}
 }
 
@@ -553,13 +693,19 @@ func installSystemd(uninstall bool) error {
 		return err
 	}
 	unitDir := filepath.Join(home, ".config", "systemd", "user")
-	unitPath := filepath.Join(unitDir, "autoskills.service")
+	unitPath := filepath.Join(unitDir, serviceName)
+	legacyUnitPath := filepath.Join(unitDir, legacyServiceName)
 
 	if uninstall {
-		_ = exec.Command("systemctl", "--user", "disable", "--now", "autoskills.service").Run()
-		if err := os.Remove(unitPath); err != nil && !os.IsNotExist(err) {
-			return err
+		for _, name := range []string{serviceName, legacyServiceName} {
+			_, _ = runServiceCommand("systemctl", "--user", "disable", "--now", name)
 		}
+		for _, path := range []string{unitPath, legacyUnitPath} {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+		_, _ = runServiceCommand("systemctl", "--user", "daemon-reload")
 		fmt.Println("daemon uninstalled")
 		return nil
 	}
@@ -569,7 +715,7 @@ func installSystemd(uninstall bool) error {
 		return err
 	}
 	unit := fmt.Sprintf(`[Unit]
-Description=autoskills daemon — distill agent sessions into skills
+Description=temper daemon — distill agent sessions into skills
 
 [Service]
 ExecStart=%s daemon
@@ -582,16 +728,90 @@ WantedBy=default.target
 	if err := os.MkdirAll(unitDir, 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
+	newSnapshot, err := snapshotFile(unitPath)
+	if err != nil {
 		return err
 	}
-	if out, err := exec.Command("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
-		return fmt.Errorf("systemctl daemon-reload: %v: %s", err, out)
+	_, legacyErr := os.Stat(legacyUnitPath)
+	legacyPresent := legacyErr == nil
+	if legacyErr != nil && !errors.Is(legacyErr, os.ErrNotExist) {
+		return legacyErr
 	}
-	if out, err := exec.Command("systemctl", "--user", "enable", "--now", "autoskills.service").CombinedOutput(); err != nil {
-		return fmt.Errorf("systemctl enable: %v: %s", err, out)
+	legacySnapshot, err := snapshotFile(legacyUnitPath)
+	if err != nil {
+		return err
 	}
-	fmt.Printf("daemon installed (%s)\nlogs: journalctl --user -u autoskills.service\n", unitPath)
+	if legacyPresent {
+		out, stopErr := runServiceCommand("systemctl", "--user", "disable", "--now", legacyServiceName)
+		if stopErr != nil {
+			return commandError("stop legacy systemd unit", out, stopErr)
+		}
+		active, activeErr := serviceActive("systemctl", "--user", "is-active", "--quiet", legacyServiceName)
+		if activeErr != nil {
+			return fmt.Errorf("verify legacy systemd unit stopped: %w", activeErr)
+		}
+		if active {
+			return fmt.Errorf("legacy systemd unit %s is still active after stop", legacyServiceName)
+		}
+	}
+	result, plan, err := migrateState()
+	if err != nil {
+		if legacyPresent {
+			if out, restartErr := runServiceCommand("systemctl", "--user", "enable", "--now", legacyServiceName); restartErr != nil {
+				return errors.Join(err, commandError("restore legacy systemd unit", out, restartErr))
+			}
+		}
+		return err
+	}
+	rollback := func(cause error) error {
+		stopOut, stopNewErr := runServiceCommand("systemctl", "--user", "disable", "--now", serviceName)
+		if stopNewErr != nil {
+			return errors.Join(cause, commandError("stop failed Temper systemd unit", stopOut, stopNewErr), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		active, verifyErr := serviceActive("systemctl", "--user", "is-active", "--quiet", serviceName)
+		if verifyErr != nil {
+			return errors.Join(cause, fmt.Errorf("verify failed Temper systemd unit stopped: %w", verifyErr), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		if active {
+			return errors.Join(cause, errors.New("failed Temper systemd unit is still active"), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		var errs = []error{cause, restoreFile(unitPath, newSnapshot), restoreFile(legacyUnitPath, legacySnapshot)}
+		var homeRollbackErr error
+		if result.Migrated {
+			homeRollbackErr = plan.Rollback()
+			errs = append(errs, homeRollbackErr)
+		}
+		if legacyPresent && homeRollbackErr == nil {
+			out, restartErr := runServiceCommand("systemctl", "--user", "enable", "--now", legacyServiceName)
+			errs = append(errs, commandError("restore legacy systemd unit", out, restartErr))
+		} else if legacyPresent {
+			errs = append(errs, errors.New("legacy systemd unit was not restarted because its home could not be restored"))
+		}
+		return errors.Join(errs...)
+	}
+	if err := os.WriteFile(unitPath, []byte(unit), 0o644); err != nil {
+		return rollback(err)
+	}
+	if out, reloadErr := runServiceCommand("systemctl", "--user", "daemon-reload"); reloadErr != nil {
+		return rollback(commandError("systemctl daemon-reload", out, reloadErr))
+	}
+	if out, enableErr := runServiceCommand("systemctl", "--user", "enable", "--now", serviceName); enableErr != nil {
+		return rollback(commandError("systemctl enable", out, enableErr))
+	}
+	active, healthErr := serviceStable("systemctl", "--user", "is-active", "--quiet", serviceName)
+	if healthErr != nil {
+		return rollback(fmt.Errorf("verify Temper systemd health: %w", healthErr))
+	}
+	if !active {
+		return rollback(errors.New("verify Temper systemd health: service is not active"))
+	}
+	if err := os.Remove(legacyUnitPath); err != nil && !os.IsNotExist(err) {
+		return rollback(fmt.Errorf("remove legacy systemd unit: %w", err))
+	}
+	if out, reloadErr := runServiceCommand("systemctl", "--user", "daemon-reload"); reloadErr != nil {
+		return rollback(commandError("reload systemd after legacy cleanup", out, reloadErr))
+	}
+	fmt.Printf("daemon installed (%s)\nlogs: journalctl --user -u %s\n", unitPath, serviceName)
 	return nil
 }
 
@@ -601,11 +821,14 @@ func installLaunchd(uninstall bool) error {
 		return err
 	}
 	plistPath := home + "/Library/LaunchAgents/" + launchdLabel + ".plist"
+	legacyPlistPath := home + "/Library/LaunchAgents/" + legacyLaunchdLabel + ".plist"
 
 	if uninstall {
-		_ = exec.Command("launchctl", "unload", plistPath).Run()
-		if err := os.Remove(plistPath); err != nil && !os.IsNotExist(err) {
-			return err
+		for _, path := range []string{plistPath, legacyPlistPath} {
+			_, _ = runServiceCommand("launchctl", "unload", path)
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 		fmt.Println("daemon uninstalled")
 		return nil
@@ -625,22 +848,92 @@ func installLaunchd(uninstall bool) error {
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ProcessType</key><string>Background</string>
-  <key>StandardOutPath</key><string>%s/.autoskills/daemon.log</string>
-  <key>StandardErrorPath</key><string>%s/.autoskills/daemon.log</string>
+  <key>StandardOutPath</key><string>%s/.temper/daemon.log</string>
+  <key>StandardErrorPath</key><string>%s/.temper/daemon.log</string>
 </dict>
 </plist>
 `, launchdLabel, exe, home, home)
-	if err := os.MkdirAll(home+"/.autoskills", 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(plistPath), 0o755); err != nil {
 		return err
 	}
+	newSnapshot, err := snapshotFile(plistPath)
+	if err != nil {
+		return err
+	}
+	_, legacyErr := os.Stat(legacyPlistPath)
+	legacyPresent := legacyErr == nil
+	if legacyErr != nil && !errors.Is(legacyErr, os.ErrNotExist) {
+		return legacyErr
+	}
+	legacySnapshot, err := snapshotFile(legacyPlistPath)
+	if err != nil {
+		return err
+	}
+	if legacyPresent {
+		if out, unloadErr := runServiceCommand("launchctl", "unload", legacyPlistPath); unloadErr != nil {
+			return commandError("stop legacy launchd agent", out, unloadErr)
+		}
+		active, listedErr := serviceActive("launchctl", "list", legacyLaunchdLabel)
+		if listedErr != nil {
+			return fmt.Errorf("verify legacy launchd agent stopped: %w", listedErr)
+		}
+		if active {
+			return fmt.Errorf("legacy launchd agent %s is still loaded after stop", legacyLaunchdLabel)
+		}
+	}
+	result, plan, err := migrateState()
+	if err != nil {
+		if legacyPresent {
+			if out, restartErr := runServiceCommand("launchctl", "load", legacyPlistPath); restartErr != nil {
+				return errors.Join(err, commandError("restore legacy launchd agent", out, restartErr))
+			}
+		}
+		return err
+	}
+	rollback := func(cause error) error {
+		stopOut, stopNewErr := runServiceCommand("launchctl", "unload", plistPath)
+		if stopNewErr != nil {
+			return errors.Join(cause, commandError("stop failed Temper launchd agent", stopOut, stopNewErr), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		active, verifyErr := serviceActive("launchctl", "list", launchdLabel)
+		if verifyErr != nil {
+			return errors.Join(cause, fmt.Errorf("verify failed Temper launchd agent stopped: %w", verifyErr), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		if active {
+			return errors.Join(cause, errors.New("failed Temper launchd agent is still running"), errors.New("rollback halted before touching state because Temper may still be running"))
+		}
+		var errs = []error{cause, restoreFile(plistPath, newSnapshot), restoreFile(legacyPlistPath, legacySnapshot)}
+		var homeRollbackErr error
+		if result.Migrated {
+			homeRollbackErr = plan.Rollback()
+			errs = append(errs, homeRollbackErr)
+		}
+		if legacyPresent && homeRollbackErr == nil {
+			out, restartErr := runServiceCommand("launchctl", "load", legacyPlistPath)
+			errs = append(errs, commandError("restore legacy launchd agent", out, restartErr))
+		} else if legacyPresent {
+			errs = append(errs, errors.New("legacy launchd agent was not restarted because its home could not be restored"))
+		}
+		return errors.Join(errs...)
+	}
+	_, _ = runServiceCommand("launchctl", "unload", plistPath)
 	if err := os.WriteFile(plistPath, []byte(plist), 0o644); err != nil {
-		return err
+		return rollback(err)
 	}
-	_ = exec.Command("launchctl", "unload", plistPath).Run() // reload if already installed
-	if out, err := exec.Command("launchctl", "load", plistPath).CombinedOutput(); err != nil {
-		return fmt.Errorf("launchctl load: %v: %s", err, out)
+	if out, loadErr := runServiceCommand("launchctl", "load", plistPath); loadErr != nil {
+		return rollback(commandError("launchctl load", out, loadErr))
 	}
-	fmt.Printf("daemon installed (%s)\nlogs: ~/.autoskills/daemon.log\n", plistPath)
+	active, healthErr := serviceStable("launchctl", "list", launchdLabel)
+	if healthErr != nil {
+		return rollback(fmt.Errorf("verify Temper launchd health: %w", healthErr))
+	}
+	if !active {
+		return rollback(errors.New("verify Temper launchd health: agent is not loaded"))
+	}
+	if err := os.Remove(legacyPlistPath); err != nil && !os.IsNotExist(err) {
+		return rollback(fmt.Errorf("remove legacy launchd plist: %w", err))
+	}
+	fmt.Printf("daemon installed (%s)\nlogs: ~/.temper/daemon.log\n", plistPath)
 	return nil
 }
 
@@ -696,7 +989,7 @@ func cmdGarden(args []string) error {
 	if stored == 0 {
 		fmt.Println("garden: nothing to improve — the skill section is healthy")
 	} else {
-		fmt.Printf("\n%d gardening actions proposed — run autoskills review\n", stored)
+		fmt.Printf("\n%d gardening actions proposed — run temper review\n", stored)
 	}
 	return nil
 }
@@ -757,7 +1050,7 @@ func cmdVerify(args []string) error {
 	case stale == 0 && drifted == 0:
 		fmt.Printf("verify: all %d skills reference existing paths\n", len(blocks))
 	default:
-		fmt.Printf("\n%d stale, %d possibly-drifted skill(s) — run autoskills garden to propose fixes\n", stale, drifted)
+		fmt.Printf("\n%d stale, %d possibly-drifted skill(s) — run temper garden to propose fixes\n", stale, drifted)
 	}
 	return nil
 }
@@ -780,7 +1073,7 @@ func pathRefs(body string) []string {
 
 func cmdUndo(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: autoskills undo <suggestion-id>")
+		return fmt.Errorf("usage: temper undo <suggestion-id>")
 	}
 	id := args[0]
 	cfg, err := config.Load()
@@ -880,7 +1173,7 @@ func cmdReview(args []string) error {
 	// and a wildcard address grants no name beyond loopback
 	srv := &server.Server{Store: st, Addr: *addr}
 	url := "http://" + *addr
-	fmt.Printf("autoskills review — %s (ctrl-c to stop)\n", url)
+	fmt.Printf("temper review — %s (ctrl-c to stop)\n", url)
 	if !*noOpen {
 		go func() {
 			time.Sleep(300 * time.Millisecond)

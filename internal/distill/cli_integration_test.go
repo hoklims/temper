@@ -6,13 +6,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/llm"
-	"github.com/elcruzo/autoskills/internal/outbound"
+	"github.com/hoklims/temper/internal/llm"
+	"github.com/hoklims/temper/internal/outbound"
 )
 
 func TestCodexSuggestionSchemaSmoke(t *testing.T) {
-	if os.Getenv("AUTOSKILLS_CODEX_SCHEMA_SMOKE") == "" {
-		t.Skip("set AUTOSKILLS_CODEX_SCHEMA_SMOKE=1 to validate the distillation schema with Codex")
+	if os.Getenv("TEMPER_CODEX_SCHEMA_SMOKE") == "" {
+		t.Skip("set TEMPER_CODEX_SCHEMA_SMOKE=1 to validate the distillation schema with Codex")
 	}
 	provider, err := llm.NewCodex("")
 	if err != nil {

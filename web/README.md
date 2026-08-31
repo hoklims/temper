@@ -1,6 +1,6 @@
-# autoskills web
+# temper web
 
-Review dashboard for AutoSkills — suggested skills distilled from AI coding transcripts, reviewed as accept / edit / reject.
+Review dashboard for Temper — suggested skills distilled from AI coding transcripts, reviewed as accept / edit / reject.
 
 ## stack
 
@@ -8,10 +8,10 @@ Vite + React + TypeScript + SCSS (BEM, per-component sibling `.scss` files, `src
 
 ## dev workflow
 
-The dashboard talks to the AutoSkills Go daemon. In dev, Vite proxies `/api` to `http://127.0.0.1:4517` (see `vite.config.ts`), so start the daemon first:
+The dashboard talks to the Temper Go daemon. In dev, Vite proxies `/api` to `http://127.0.0.1:4517` (see `vite.config.ts`), so start the daemon first:
 
 ```bash
-autoskills serve          # or however you run the Go binary, listening on 127.0.0.1:4517
+temper serve          # or however you run the Go binary, listening on 127.0.0.1:4517
 ```
 
 then:

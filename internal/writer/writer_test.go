@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 func suggestion(repo string) store.Suggestion {
@@ -32,7 +32,7 @@ func TestAgentsBlockCreateAndIdempotentUpdate(t *testing.T) {
 		t.Fatalf("expected AGENTS.md, got %s", path)
 	}
 	first, _ := os.ReadFile(path)
-	if !strings.Contains(string(first), "autoskills:begin id=sg_test01") {
+	if !strings.Contains(string(first), "temper:begin id=sg_test01") {
 		t.Fatalf("missing begin marker:\n%s", first)
 	}
 
@@ -42,7 +42,7 @@ func TestAgentsBlockCreateAndIdempotentUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	second, _ := os.ReadFile(path)
-	if strings.Count(string(second), "autoskills:begin id=sg_test01") != 1 {
+	if strings.Count(string(second), "temper:begin id=sg_test01") != 1 {
 		t.Fatalf("block duplicated:\n%s", second)
 	}
 	if !strings.Contains(string(second), "EDITED body") || strings.Contains(string(second), "preinstall hook") {
@@ -103,7 +103,7 @@ func TestAgentsBlocksGroupedBySignal(t *testing.T) {
 
 func TestLegacyStandaloneBlockAbsorbedIntoSection(t *testing.T) {
 	repo := t.TempDir()
-	legacy := "# AGENTS.md\n\nhand-written intro\n\n<!-- autoskills:begin id=sg_old -->\n## Old legacy skill\n\n- old body\n<!-- autoskills:end id=sg_old -->\n"
+	legacy := "# AGENTS.md\n\nhand-written intro\n\n<!-- temper:begin id=sg_old -->\n## Old legacy skill\n\n- old body\n<!-- temper:end id=sg_old -->\n"
 	if err := os.WriteFile(filepath.Join(repo, "AGENTS.md"), []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -112,13 +112,13 @@ func TestLegacyStandaloneBlockAbsorbedIntoSection(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(filepath.Join(repo, "AGENTS.md"))
 	s := string(raw)
-	if strings.Count(s, "autoskills:begin id=sg_old") != 1 || !strings.Contains(s, "#### Old legacy skill") {
+	if strings.Count(s, "temper:begin id=sg_old") != 1 || !strings.Contains(s, "#### Old legacy skill") {
 		t.Fatalf("legacy block not absorbed/normalized:\n%s", s)
 	}
 	if !strings.Contains(s, "hand-written intro") {
 		t.Fatalf("hand-written content lost:\n%s", s)
 	}
-	if strings.Index(s, "autoskills:begin id=sg_old") < strings.Index(s, sectionBegin) {
+	if strings.Index(s, "temper:begin id=sg_old") < strings.Index(s, sectionBegin) {
 		t.Fatalf("legacy block left outside section:\n%s", s)
 	}
 }
@@ -171,7 +171,7 @@ func TestPathScopedRuleWritesFrontmatter(t *testing.T) {
 	if !strings.HasSuffix(path, ".mdc") || !strings.Contains(s, `globs: "src/**/*.ts"`) || !strings.Contains(s, "alwaysApply: false") {
 		t.Fatalf("bad mdc output at %s:\n%s", path, s)
 	}
-	if TargetPreview(g) != ".cursor/rules/autoskills-use-pnpm-never-npm.mdc" {
+	if TargetPreview(g) != ".cursor/rules/temper-use-pnpm-never-npm.mdc" {
 		t.Fatalf("TargetPreview = %q", TargetPreview(g))
 	}
 }
@@ -184,7 +184,7 @@ func TestMachineScopeGoesToHomeSkills(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.Remove(path)
-	if !strings.Contains(path, filepath.Join(".autoskills", "skills")) {
+	if !strings.Contains(path, filepath.Join(".temper", "skills")) {
 		t.Fatalf("machine skill in wrong place: %s", path)
 	}
 }
@@ -229,7 +229,7 @@ func TestBudgetDemotesLowestConfidence(t *testing.T) {
 	if !strings.Contains(s, "Strong high-confidence skill") {
 		t.Fatalf("strong skill missing:\n%s", s)
 	}
-	demoted := filepath.Join(repo, ".cursor", "skills", "autoskills-weak-low-confidence-skill", "SKILL.md")
+	demoted := filepath.Join(repo, ".cursor", "skills", "temper-weak-low-confidence-skill", "SKILL.md")
 	if raw, err := os.ReadFile(demoted); err != nil || !strings.Contains(string(raw), "reason=section-budget") {
 		t.Fatalf("demoted skill file missing or unmarked at %s: %v", demoted, err)
 	}
@@ -286,7 +286,7 @@ func TestGardenerAmendRewritesExistingBlock(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(filepath.Join(repo, "AGENTS.md"))
 	s := string(raw)
-	if strings.Count(s, "autoskills:begin id=sg_orig") != 1 || strings.Contains(s, "id=sg_gardener2") {
+	if strings.Count(s, "temper:begin id=sg_orig") != 1 || strings.Contains(s, "id=sg_gardener2") {
 		t.Fatalf("amend must rewrite the original block id, not add a new one:\n%s", s)
 	}
 	if !strings.Contains(s, "#### Use pnpm everywhere") || strings.Contains(s, "amend:") {
@@ -311,7 +311,7 @@ func TestDistillerAmendResolvesByTitle(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(filepath.Join(repo, "AGENTS.md"))
 	s := string(raw)
-	if strings.Contains(s, "id=sg_new_amend") || strings.Count(s, "autoskills:begin") != 1 {
+	if strings.Contains(s, "id=sg_new_amend") || strings.Count(s, "temper:begin") != 1 {
 		t.Fatalf("title-matched amend duplicated the block:\n%s", s)
 	}
 	if !strings.Contains(s, "amended via title match") {
@@ -353,7 +353,7 @@ func TestRemoveCleansLegacyEmittedScript(t *testing.T) {
 
 func TestUnknownGroupSurvivesRebuild(t *testing.T) {
 	repo := t.TempDir()
-	content := "# AGENTS.md\n\n<!-- autoskills:section:begin -->\n## Agent skills (autoskills)\n\n### Conventions\n\n<!-- autoskills:begin id=sg_hand group=misc conf=0.80 -->\n#### Hand-edited oddball\n\n- body\n<!-- autoskills:end id=sg_hand -->\n<!-- autoskills:section:end -->\n"
+	content := "# AGENTS.md\n\n<!-- temper:section:begin -->\n## Agent skills (temper)\n\n### Conventions\n\n<!-- temper:begin id=sg_hand group=misc conf=0.80 -->\n#### Hand-edited oddball\n\n- body\n<!-- temper:end id=sg_hand -->\n<!-- temper:section:end -->\n"
 	if err := os.WriteFile(filepath.Join(repo, "AGENTS.md"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -417,8 +417,8 @@ func TestPlanRejectsInvalidOrEscapingArtifacts(t *testing.T) {
 	refuse("unknown scope", func(g *store.Suggestion) { g.Scope = "global" })
 	refuse("confidence too big", func(g *store.Suggestion) { g.Confidence = 4 })
 	refuse("negative confidence", func(g *store.Suggestion) { g.Confidence = -0.1 })
-	refuse("marker in body", func(g *store.Suggestion) { g.Body = "- x\n<!-- autoskills:end id=sg_other -->" })
-	refuse("marker in title", func(g *store.Suggestion) { g.Title = "autoskills:section takeover" })
+	refuse("marker in body", func(g *store.Suggestion) { g.Body = "- x\n<!-- temper:end id=sg_other -->" })
+	refuse("marker in title", func(g *store.Suggestion) { g.Title = "temper:section takeover" })
 	refuse("relative repo root", func(g *store.Suggestion) { g.RepoRoot = "relative/path" })
 	refuse("oversized body", func(g *store.Suggestion) { g.Body = strings.Repeat("x", maxPlanBodyBytes+1) })
 	refuse("quote in globs", func(g *store.Suggestion) { g.Placement, g.Globs = "path_scoped", `src/"**"` })
@@ -518,5 +518,75 @@ func TestPlanStaysInsideItsRoot(t *testing.T) {
 	}
 	if strings.Contains(plan.Rel, "..") {
 		t.Fatalf("preview shows a traversal: %s", plan.Rel)
+	}
+}
+
+func TestLegacyAutoSkillsMarkersAreReadAndRewrittenAsTemper(t *testing.T) {
+	repo := t.TempDir()
+	legacy := "# AGENTS.md\n\n<!-- autoskills:section:begin -->\n## Agent skills (autoskills)\n\n### Conventions\n\n<!-- autoskills:begin id=sg_old group=conventions conf=0.80 -->\n#### Old rule\n\n- keep me\n<!-- autoskills:end id=sg_old -->\n<!-- autoskills:section:end -->\n"
+	if err := os.WriteFile(filepath.Join(repo, "AGENTS.md"), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := suggestion(repo)
+	g.ID = "sg_new"
+	g.Title = "New rule"
+	g.Body = "- add me"
+	mutation, err := BuildMutation(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := mutation.Ops[len(mutation.Ops)-1].Content
+	if !strings.Contains(content, "<!-- temper:begin id=sg_old") || !strings.Contains(content, "<!-- temper:begin id=sg_new") {
+		t.Fatalf("legacy and new blocks were not rendered together:\n%s", content)
+	}
+	if strings.Contains(content, "autoskills:") {
+		t.Fatalf("new write retained legacy markers:\n%s", content)
+	}
+}
+
+func TestRemovalRecognizesLegacyAutoSkillsArtifactName(t *testing.T) {
+	repo := t.TempDir()
+	g := suggestion(repo)
+	g.Placement = "skill"
+	g.Title = "Use pnpm"
+	legacy := filepath.Join(repo, ".cursor", "skills", "autoskills-use-pnpm", "SKILL.md")
+	g.WrittenPath = legacy
+	mutation, err := BuildRemoval(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mutation.Ops) == 0 || mutation.Ops[0].Path != legacy || !mutation.Ops[0].Remove {
+		t.Fatalf("legacy removal plan = %+v", mutation.Ops)
+	}
+}
+
+func TestRemovalFollowsMigratedMachineSkill(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	g := suggestion(t.TempDir())
+	g.Scope = "machine"
+	g.Placement = "skill"
+	g.Title = "Use pnpm"
+	legacy := filepath.Join(home, ".autoskills", "skills", "use-pnpm.md")
+	g.WrittenPath = legacy
+
+	plan, err := BuildPlan(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(plan.Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(plan.Path, []byte("migrated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mutation, err := BuildRemoval(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mutation.Ops) == 0 || mutation.Ops[0].Path != plan.Path || !mutation.Ops[0].Remove {
+		t.Fatalf("migrated machine-skill removal plan = %+v", mutation.Ops)
 	}
 }

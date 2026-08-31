@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/elcruzo/autoskills/internal/store"
+	"github.com/hoklims/temper/internal/store"
 )
 
 // A manifest is a row in a database. It is the only thing that says which bytes may be written and

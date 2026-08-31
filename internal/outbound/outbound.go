@@ -16,7 +16,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/elcruzo/autoskills/internal/redact"
+	"github.com/hoklims/temper/internal/redact"
 )
 
 // MaxUserBytes caps the assembled user message. A provider payload is both a cost and an
@@ -32,7 +32,7 @@ var ErrInvalidOutputSchema = errors.New("outbound: invalid output schema")
 
 var ErrInvalidExcludedRoot = errors.New("outbound: invalid excluded root")
 
-// neutralizer defangs the control markers a transcript could use to close AutoSkills' own
+// neutralizer defangs the control markers a transcript could use to close Temper's own
 // delimiters or to smuggle managed-block syntax into a suggestion body. The text stays readable
 // (evidence must survive) but stops being syntax. Every replacement is idempotent: a second pass
 // finds nothing left to replace.
@@ -41,7 +41,7 @@ var neutralizer = strings.NewReplacer(
 	"</transcript>", "[/transcript]",
 	"<!--", "< !--",
 	"-->", "-- >",
-	"autoskills:", "autoskills[:]",
+	"temper:", "temper[:]", "autoskills:", "autoskills[:]",
 )
 
 // Sanitize is the transformation every untrusted string undergoes before it can be shown to a

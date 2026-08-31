@@ -8,7 +8,7 @@ interface ProjectsViewProps {
 
 export function ProjectsView({ projects }: ProjectsViewProps) {
   if (projects.length === 0) {
-    return <EmptyState hint="projects" message="no projects yet — run autoskills scan." />
+    return <EmptyState hint="projects" message="no projects yet — run temper scan." />
   }
 
   return (

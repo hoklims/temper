@@ -1,4 +1,4 @@
-module github.com/elcruzo/autoskills
+module github.com/hoklims/temper
 
 go 1.25.0
 

@@ -4,11 +4,11 @@ Statut : accepté le 30 août 2026.
 
 ## Contexte
 
-AutoSkills doit capitaliser sur les sessions passées sans ralentir Claude Code, Codex ou Cursor. Un hook cognitif après chaque action multiplierait les appels LLM, le coût, les points de panne et la surface d’injection.
+Temper doit capitaliser sur les sessions passées sans ralentir Claude Code, Codex ou Cursor. Un hook cognitif après chaque action multiplierait les appels LLM, le coût, les points de panne et la surface d’injection.
 
 ## Décision
 
-Le hot path des agents ne contient aucun appel AutoSkills obligatoire. Les collectors lisent les traces déjà produites. Les signaux et la redaction s’exécutent localement. La distillation attend un seuil ou une commande explicite et traite un lot borné.
+Le hot path des agents ne contient aucun appel Temper obligatoire. Les collectors lisent les traces déjà produites. Les signaux et la redaction s’exécutent localement. La distillation attend un seuil ou une commande explicite et traite un lot borné.
 
 L’ordre de préférence reste : règle déterministe, retrieval lexical ou metadata, petit appel LLM ciblé, puis modèle puissant seulement si la tâche le justifie.
 
